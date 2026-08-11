@@ -8,7 +8,7 @@ export type AdminOrder = {
   order_number: number;
   customer_name: string;
   phone: string;
-  order_type: "retirada" | "entrega";
+  order_type: "retirada" | "entrega" | "local";
   address: string | null;
   number: string | null;
   complement: string | null;
@@ -46,7 +46,7 @@ export function OrderCard({
 }) {
   const next = NEXT[order.status];
   const nextForPickup =
-    order.order_type === "retirada" && order.status === "pronto"
+    order.order_type !== "entrega" && order.status === "pronto"
       ? { status: "concluido" as OrderStatus, label: "CONCLUIR PEDIDO", icon: Check }
       : next;
 
@@ -59,7 +59,7 @@ export function OrderCard({
           <p className="text-xs text-muted-foreground">{order.phone}</p>
         </div>
         <span className="rounded-full border border-gold/40 px-2 py-0.5 text-[10px] tracking-wide text-gold uppercase">
-          {order.order_type}
+          {order.order_type === "local" ? "no local" : order.order_type}
         </span>
       </header>
 

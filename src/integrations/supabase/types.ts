@@ -141,7 +141,10 @@ export type Database = {
           p_shrimp: boolean
           p_size: string
         }
-        Returns: number
+        Returns: {
+          order_number: number
+          total: number
+        }[]
       }
       has_role: {
         Args: {

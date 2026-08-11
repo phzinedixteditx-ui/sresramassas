@@ -153,7 +153,11 @@ function Acompanhar() {
               <div className="text-right">
                 <p className="text-xs text-muted-foreground">
                   {order.customer_name} ·{" "}
-                  {order.order_type === "entrega" ? "Entrega" : "Retirada"}
+                  {order.order_type === "entrega"
+                    ? "Entrega"
+                    : order.order_type === "local"
+                      ? "Comer no local"
+                      : "Retirada"}
                 </p>
                 <p className="font-display text-2xl font-bold text-gold">{brl(Number(order.total))}</p>
               </div>

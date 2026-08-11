@@ -61,7 +61,7 @@ const STEP_LABELS = [
 type Customer = {
   name: string;
   phone: string;
-  orderType: "retirada" | "entrega";
+  orderType: "retirada" | "entrega" | "local";
   address: string;
   number: string;
   complement: string;
@@ -113,7 +113,7 @@ function Montar() {
         return (
           customer.name.trim().length >= 2 &&
           customer.phone.replace(/\D/g, "").length >= 10 &&
-          (customer.orderType === "retirada" ||
+          (customer.orderType !== "entrega" ||
             (customer.address.trim() !== "" && customer.neighborhood.trim() !== ""))
         );
       default:
@@ -169,7 +169,8 @@ function Montar() {
       toast.error("Não foi possível enviar o pedido", { description: error.message });
       return;
     }
-    setOrderNumber(data as number);
+    const row = (data as { order_number: number }[] | null)?.[0] ?? null;
+    setOrderNumber(row ? row.order_number : null);
     toast.success("Pedido enviado para a cozinha!");
   }
 
@@ -385,12 +386,18 @@ function Montar() {
                   </Field>
                 </div>
 
-                <div className="grid gap-3 sm:grid-cols-2">
+                <div className="grid gap-3 sm:grid-cols-3">
                   <OptionCard
                     title="Retirada"
                     description="Buscar no restaurante"
                     selected={customer.orderType === "retirada"}
                     onClick={() => setCustomer({ ...customer, orderType: "retirada" })}
+                  />
+                  <OptionCard
+                    title="Comer no local"
+                    description="Servimos na mesa"
+                    selected={customer.orderType === "local"}
+                    onClick={() => setCustomer({ ...customer, orderType: "local" })}
                   />
                   <OptionCard
                     title="Entrega"
@@ -465,11 +472,13 @@ function Montar() {
                 <SummaryRow label="Finalização" list={finishing} />
                 <SummaryRow label="Cliente" value={`${customer.name} · ${customer.phone}`} />
                 <SummaryRow
-                  label="Entrega"
+                  label="Pedido"
                   value={
                     customer.orderType === "entrega"
                       ? `${customer.address}, ${customer.number} — ${customer.neighborhood}`
-                      : "Retirada no restaurante"
+                      : customer.orderType === "local"
+                        ? "Comer no local"
+                        : "Retirada no restaurante"
                   }
                 />
                 {customer.notes ? <SummaryRow label="Observações" value={customer.notes} /> : null}

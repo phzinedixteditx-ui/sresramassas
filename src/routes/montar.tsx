@@ -112,7 +112,8 @@ function Montar() {
       case 7:
         return (
           customer.name.trim().length >= 2 &&
-          customer.phone.replace(/\D/g, "").length >= 10 &&
+          (customer.orderType === "local" ||
+            customer.phone.replace(/\D/g, "").length >= 10) &&
           (customer.orderType !== "entrega" ||
             (customer.address.trim() !== "" && customer.neighborhood.trim() !== ""))
         );
@@ -366,7 +367,11 @@ function Montar() {
           {step === 7 ? (
             <StepShell title="Seus dados" subtitle="Para prepararmos e entregarmos certinho.">
               <div className="grid gap-4">
-                <div className="grid gap-4 sm:grid-cols-2">
+                <div
+                  className={
+                    customer.orderType === "local" ? "grid gap-4" : "grid gap-4 sm:grid-cols-2"
+                  }
+                >
                   <Field label="Nome">
                     <Input
                       value={customer.name}
@@ -375,6 +380,7 @@ function Montar() {
                       onChange={(e) => setCustomer({ ...customer, name: e.target.value })}
                     />
                   </Field>
+                  {customer.orderType === "local" ? null : (
                   <Field label="Telefone / WhatsApp">
                     <Input
                       value={customer.phone}
@@ -384,6 +390,7 @@ function Montar() {
                       onChange={(e) => setCustomer({ ...customer, phone: e.target.value })}
                     />
                   </Field>
+                  )}
                 </div>
 
                 <div className="grid gap-3 sm:grid-cols-3">
@@ -470,7 +477,14 @@ function Montar() {
                 />
                 <SummaryRow label="Refogado" value={saute ?? "-"} />
                 <SummaryRow label="Finalização" list={finishing} />
-                <SummaryRow label="Cliente" value={`${customer.name} · ${customer.phone}`} />
+                <SummaryRow
+                  label="Cliente"
+                  value={
+                    customer.orderType === "local"
+                      ? customer.name
+                      : `${customer.name} · ${customer.phone}`
+                  }
+                />
                 <SummaryRow
                   label="Pedido"
                   value={

@@ -13,7 +13,9 @@ export function SiteFooter() {
         <div className="flex gap-6 text-sm text-muted-foreground">
           <Link to="/cardapio">Cardápio</Link>
           <Link to="/montar">Monte sua Massa</Link>
-          <Link to="/acompanhar">Acompanhar</Link>
+          <Link to="/acompanhar" search={{ pedido: undefined }}>
+            Acompanhar
+          </Link>
         </div>
         <p className="text-xs text-muted-foreground">
           © {new Date().getFullYear()} Sr e Sra Massas — Mais que massas, criamos novas experiências.

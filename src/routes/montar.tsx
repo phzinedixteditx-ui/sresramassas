@@ -1,5 +1,5 @@
 import { createFileRoute, Link } from "@tanstack/react-router";
-import { ArrowLeft, ArrowRight, CheckCircle2, Loader2, PartyPopper } from "lucide-react";
+import { ArrowLeft, ArrowRight, CheckCircle2, Loader2, MessageCircle, PartyPopper } from "lucide-react";
 import { useMemo, useState } from "react";
 import { toast } from "sonner";
 
@@ -18,12 +18,15 @@ import {
   FINISHINGS,
   INGREDIENTS,
   PASTAS,
+  RESTAURANT_WHATSAPP,
+  RESTAURANT_WHATSAPP_LABEL,
   SAUCES,
   SAUTES,
   SHRIMP_PRICE,
   SIZES,
   sizeInfo,
   type SizeId,
+  whatsappLink,
 } from "@/lib/menu";
 
 export const Route = createFileRoute("/montar")({

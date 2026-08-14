@@ -226,6 +226,15 @@ function Montar() {
           </div>
           <div className="mt-8 flex w-full flex-col gap-3 sm:flex-row">
             <Button asChild variant="gold" size="lg" className="flex-1">
+              <a
+                href={whatsappLink(RESTAURANT_WHATSAPP, waMessage)}
+                target="_blank"
+                rel="noreferrer"
+              >
+                <MessageCircle /> ENVIAR NO WHATSAPP
+              </a>
+            </Button>
+            <Button asChild variant="gold" size="lg" className="flex-1">
               <Link to="/acompanhar" search={{ pedido: String(orderNumber) }}>
                 ACOMPANHAR PEDIDO
               </Link>
@@ -234,6 +243,9 @@ function Montar() {
               <Link to="/">Voltar ao início</Link>
             </Button>
           </div>
+          <p className="mt-4 text-xs text-muted-foreground">
+            Dúvidas? Fale com a gente no WhatsApp {RESTAURANT_WHATSAPP_LABEL}
+          </p>
         </main>
         <SiteFooter />
       </div>

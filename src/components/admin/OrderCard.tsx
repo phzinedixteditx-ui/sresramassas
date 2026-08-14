@@ -99,11 +99,32 @@ export function OrderCard({
           </div>
         ) : null}
         {order.order_type === "entrega" ? (
-          <p className="text-muted-foreground">
-            📍 {order.address}, {order.number}
-            {order.complement ? ` · ${order.complement}` : ""} — {order.neighborhood}
-            {order.reference ? ` (${order.reference})` : ""}
-          </p>
+          <div className="rounded-lg border border-gold/40 bg-gold/8 px-2.5 py-2">
+            <p className="text-[10px] tracking-[0.15em] text-gold uppercase">
+              Endereço de entrega
+            </p>
+            <p className="mt-1 font-medium text-foreground">
+              {order.address}
+              {order.number ? `, ${order.number}` : ""}
+              {order.complement ? ` · ${order.complement}` : ""}
+            </p>
+            {order.neighborhood ? (
+              <p className="text-foreground">Bairro: {order.neighborhood}</p>
+            ) : null}
+            {order.reference ? (
+              <p className="text-muted-foreground">Ref.: {order.reference}</p>
+            ) : null}
+            {order.phone ? (
+              <a
+                className="mt-1 inline-block text-gold underline-offset-4 hover:underline"
+                href={`https://wa.me/55${order.phone.replace(/\D/g, "")}`}
+                target="_blank"
+                rel="noreferrer"
+              >
+                📞 {order.phone}
+              </a>
+            ) : null}
+          </div>
         ) : null}
         {order.notes ? (
           <p className="rounded-lg border border-gold/30 bg-gold/8 px-2 py-1.5 text-foreground">

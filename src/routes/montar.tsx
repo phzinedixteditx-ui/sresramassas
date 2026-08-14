@@ -234,7 +234,7 @@ function Montar() {
                 <MessageCircle /> ENVIAR NO WHATSAPP
               </a>
             </Button>
-            <Button asChild variant="gold" size="lg" className="flex-1">
+            <Button asChild variant="goldOutline" size="lg" className="flex-1">
               <Link to="/acompanhar" search={{ pedido: String(orderNumber) }}>
                 ACOMPANHAR PEDIDO
               </Link>

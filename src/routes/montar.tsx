@@ -1,5 +1,5 @@
 import { createFileRoute, Link } from "@tanstack/react-router";
-import { ArrowLeft, ArrowRight, CheckCircle2, Loader2, PartyPopper } from "lucide-react";
+import { ArrowLeft, ArrowRight, CheckCircle2, Loader2, MessageCircle, PartyPopper } from "lucide-react";
 import { useMemo, useState } from "react";
 import { toast } from "sonner";
 
@@ -18,12 +18,15 @@ import {
   FINISHINGS,
   INGREDIENTS,
   PASTAS,
+  RESTAURANT_WHATSAPP,
+  RESTAURANT_WHATSAPP_LABEL,
   SAUCES,
   SAUTES,
   SHRIMP_PRICE,
   SIZES,
   sizeInfo,
   type SizeId,
+  whatsappLink,
 } from "@/lib/menu";
 
 export const Route = createFileRoute("/montar")({
@@ -176,6 +179,29 @@ function Montar() {
   }
 
   if (orderNumber !== null) {
+    const waMessage = [
+      `*Pedido #${orderNumber}* — Sr e Sra Massas`,
+      `Cliente: ${customer.name}`,
+      customer.orderType === "entrega"
+        ? `Entrega: ${customer.address}${customer.number ? `, ${customer.number}` : ""}${customer.complement ? ` - ${customer.complement}` : ""}${customer.neighborhood ? ` - ${customer.neighborhood}` : ""}`
+        : customer.orderType === "retirada"
+          ? "Retirada no local"
+          : "Comer no local",
+      "",
+      `Tamanho: ${sizeInfo(size)?.label ?? size}`,
+      `Massa: ${pasta}`,
+      `Molho: ${sauce}`,
+      `Ingredientes: ${ingredients.length ? ingredients.join(", ") : "nenhum"}`,
+      shrimp ? `Camarão: sim (+${brl(SHRIMP_PRICE)})` : null,
+      `Refogado: ${saute}`,
+      finishing.length ? `Finalização: ${finishing.join(", ")}` : null,
+      customer.notes ? `Obs.: ${customer.notes}` : null,
+      "",
+      `Total: ${brl(total)}`,
+    ]
+      .filter(Boolean)
+      .join("\n");
+
     return (
       <div className="min-h-screen bg-background">
         <SiteHeader />
@@ -200,6 +226,15 @@ function Montar() {
           </div>
           <div className="mt-8 flex w-full flex-col gap-3 sm:flex-row">
             <Button asChild variant="gold" size="lg" className="flex-1">
+              <a
+                href={whatsappLink(RESTAURANT_WHATSAPP, waMessage)}
+                target="_blank"
+                rel="noreferrer"
+              >
+                <MessageCircle /> ENVIAR NO WHATSAPP
+              </a>
+            </Button>
+            <Button asChild variant="goldOutline" size="lg" className="flex-1">
               <Link to="/acompanhar" search={{ pedido: String(orderNumber) }}>
                 ACOMPANHAR PEDIDO
               </Link>
@@ -208,6 +243,9 @@ function Montar() {
               <Link to="/">Voltar ao início</Link>
             </Button>
           </div>
+          <p className="mt-4 text-xs text-muted-foreground">
+            Dúvidas? Fale com a gente no WhatsApp {RESTAURANT_WHATSAPP_LABEL}
+          </p>
         </main>
         <SiteFooter />
       </div>

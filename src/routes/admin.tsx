@@ -88,18 +88,30 @@ function AdminShell({ children }: { children: React.ReactNode }) {
 }
 
 function AdminLogin() {
-  const [email, setEmail] = useState("");
+  const [username, setUsername] = useState("");
   const [password, setPassword] = useState("");
   const [mode, setMode] = useState<"login" | "signup">("login");
   const [loading, setLoading] = useState(false);
 
   async function submit(e: React.FormEvent) {
     e.preventDefault();
+    const user = username.trim().toLowerCase();
+    if (!/^[a-z0-9._-]{3,}$/.test(user)) {
+      toast.error("Usuário inválido", {
+        description: "Use ao menos 3 caracteres: letras, números, ponto, hífen ou underline.",
+      });
+      return;
+    }
+    const email = `${user}@srsramassas.app`;
     setLoading(true);
     if (mode === "login") {
       const { error } = await supabase.auth.signInWithPassword({ email, password });
       setLoading(false);
-      if (error) toast.error("Não foi possível entrar", { description: error.message });
+      if (error) {
+        toast.error("Não foi possível entrar", {
+          description: "Usuário ou senha incorretos.",
+        });
+      }
     } else {
       const { data, error } = await supabase.auth.signUp({
         email,
@@ -108,12 +120,23 @@ function AdminLogin() {
       });
       setLoading(false);
       if (error) {
-        toast.error("Não foi possível criar a conta", { description: error.message });
+        toast.error("Não foi possível criar a conta", {
+          description: error.message.toLowerCase().includes("already")
+            ? "Este usuário já existe. Faça login."
+            : error.message,
+        });
         return;
       }
       if (!data.session) {
-        toast.success("Confirme seu e-mail para ativar o acesso.");
+        const { error: signInError } = await supabase.auth.signInWithPassword({ email, password });
+        if (signInError) {
+          toast.error("Conta criada, mas não foi possível entrar", {
+            description: signInError.message,
+          });
+          return;
+        }
       }
+      toast.success("Conta criada! Bem-vindo ao painel.");
     }
   }
 
@@ -123,13 +146,15 @@ function AdminLogin() {
       <p className="mt-1 text-sm text-muted-foreground">Acesso restrito à equipe.</p>
       <form className="mt-8 space-y-4 text-left" onSubmit={submit}>
         <div className="space-y-2">
-          <Label className="text-xs tracking-wide text-muted-foreground uppercase">E-mail</Label>
+          <Label className="text-xs tracking-wide text-muted-foreground uppercase">Usuário</Label>
           <Input
-            type="email"
+            type="text"
             required
-            value={email}
-            onChange={(e) => setEmail(e.target.value)}
-            autoComplete="email"
+            placeholder="ex: cozinha"
+            value={username}
+            onChange={(e) => setUsername(e.target.value)}
+            autoCapitalize="none"
+            autoComplete="username"
           />
         </div>
         <div className="space-y-2">

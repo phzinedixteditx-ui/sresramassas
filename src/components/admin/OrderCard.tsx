@@ -1,7 +1,7 @@
-import { Bike, Check, ChefHat, PackageCheck } from "lucide-react";
+import { Bike, Check, ChefHat, MessageCircle, PackageCheck } from "lucide-react";
 
 import { Button } from "@/components/ui/button";
-import { brl, type OrderStatus } from "@/lib/menu";
+import { brl, whatsappLink, type OrderStatus } from "@/lib/menu";
 
 export type AdminOrder = {
   id: string;
@@ -56,7 +56,16 @@ export function OrderCard({
         <div>
           <p className="font-display text-lg font-bold text-gold">#{order.order_number}</p>
           <p className="text-sm font-medium text-foreground">{order.customer_name}</p>
-          <p className="text-xs text-muted-foreground">{order.phone}</p>
+          {order.phone ? (
+            <a
+              className="mt-0.5 inline-flex items-center gap-1 text-xs text-gold underline-offset-4 hover:underline"
+              href={whatsappLink(order.phone, `Olá ${order.customer_name}, aqui é do Sr e Sra Massas sobre o pedido #${order.order_number}.`)}
+              target="_blank"
+              rel="noreferrer"
+            >
+              <MessageCircle className="size-3" /> {order.phone}
+            </a>
+          ) : null}
         </div>
         <span className="rounded-full border border-gold/40 px-2 py-0.5 text-[10px] tracking-wide text-gold uppercase">
           {order.order_type === "local" ? "no local" : order.order_type}
@@ -117,7 +126,7 @@ export function OrderCard({
             {order.phone ? (
               <a
                 className="mt-1 inline-block text-gold underline-offset-4 hover:underline"
-                href={`https://wa.me/55${order.phone.replace(/\D/g, "")}`}
+                href={whatsappLink(order.phone)}
                 target="_blank"
                 rel="noreferrer"
               >

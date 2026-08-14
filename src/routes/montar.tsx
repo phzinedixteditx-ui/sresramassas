@@ -179,6 +179,29 @@ function Montar() {
   }
 
   if (orderNumber !== null) {
+    const waMessage = [
+      `*Pedido #${orderNumber}* — Sr e Sra Massas`,
+      `Cliente: ${customer.name}`,
+      customer.orderType === "entrega"
+        ? `Entrega: ${customer.address}${customer.number ? `, ${customer.number}` : ""}${customer.complement ? ` - ${customer.complement}` : ""}${customer.neighborhood ? ` - ${customer.neighborhood}` : ""}`
+        : customer.orderType === "retirada"
+          ? "Retirada no local"
+          : "Comer no local",
+      "",
+      `Tamanho: ${sizeInfo(size)?.label ?? size}`,
+      `Massa: ${pasta}`,
+      `Molho: ${sauce}`,
+      `Ingredientes: ${ingredients.length ? ingredients.join(", ") : "nenhum"}`,
+      shrimp ? `Camarão: sim (+${brl(SHRIMP_PRICE)})` : null,
+      `Refogado: ${saute}`,
+      finishing.length ? `Finalização: ${finishing.join(", ")}` : null,
+      customer.notes ? `Obs.: ${customer.notes}` : null,
+      "",
+      `Total: ${brl(total)}`,
+    ]
+      .filter(Boolean)
+      .join("\n");
+
     return (
       <div className="min-h-screen bg-background">
         <SiteHeader />

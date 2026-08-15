@@ -1,4 +1,4 @@
-import { Bike, Check, ChefHat, MessageCircle, PackageCheck } from "lucide-react";
+import { Bike, Check, ChefHat, MessageCircle, PackageCheck, X } from "lucide-react";
 
 import { Button } from "@/components/ui/button";
 import { brl, whatsappLink, type OrderStatus } from "@/lib/menu";
@@ -40,9 +40,11 @@ const NEXT: Record<OrderStatus, { status: OrderStatus; label: string; icon: type
 export function OrderCard({
   order,
   onAdvance,
+  onCancel,
 }: {
   order: AdminOrder;
   onAdvance: (order: AdminOrder, status: OrderStatus) => void;
+  onCancel: (order: AdminOrder) => void;
 }) {
   const next = NEXT[order.status];
   const nextForPickup =
@@ -67,9 +69,23 @@ export function OrderCard({
             </a>
           ) : null}
         </div>
-        <span className="rounded-full border border-gold/40 px-2 py-0.5 text-[10px] tracking-wide text-gold uppercase">
-          {order.order_type === "local" ? "no local" : order.order_type}
-        </span>
+        <div className="flex flex-col items-end gap-2">
+          <button
+            type="button"
+            className="rounded-full bg-red-500/10 p-1.5 text-red-500 transition-colors hover:bg-red-500/20"
+            title="Cancelar e remover pedido"
+            onClick={() => {
+              if (window.confirm(`Tem certeza que deseja cancelar o pedido #${order.order_number}? Ele será excluído do painel.`)) {
+                onCancel(order);
+              }
+            }}
+          >
+            <X className="size-4" />
+          </button>
+          <span className="rounded-full border border-gold/40 px-2 py-0.5 text-[10px] tracking-wide text-gold uppercase">
+            {order.order_type === "local" ? "no local" : order.order_type}
+          </span>
+        </div>
       </header>
 
       <div className="mt-3 space-y-2 border-t border-border/70 pt-3 text-xs">

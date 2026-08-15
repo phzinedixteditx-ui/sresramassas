@@ -1,5 +1,5 @@
 import { createFileRoute, Link } from "@tanstack/react-router";
-import { ArrowLeft, ArrowRight, CheckCircle2, Loader2, MessageCircle, PartyPopper } from "lucide-react";
+import { ArrowLeft, ArrowRight, CheckCircle2, Loader2, MessageCircle, PartyPopper, Plus } from "lucide-react";
 import { useMemo, useState } from "react";
 import { toast } from "sonner";
 
@@ -73,8 +73,21 @@ type Customer = {
   notes: string;
 };
 
+type CartItem = {
+  size: SizeId;
+  pasta: string;
+  sauce: string;
+  ingredients: string[];
+  shrimp: boolean;
+  saute: string;
+  finishing: string[];
+  total: number;
+};
+
 function Montar() {
   const [step, setStep] = useState(0);
+  const [cartItems, setCartItems] = useState<CartItem[]>([]);
+
   const [size, setSize] = useState<SizeId | null>(null);
   const [pasta, setPasta] = useState<string | null>(null);
   const [sauce, setSauce] = useState<string | null>(null);
@@ -82,6 +95,7 @@ function Montar() {
   const [shrimp, setShrimp] = useState(false);
   const [saute, setSaute] = useState<string | null>(null);
   const [finishing, setFinishing] = useState<string[]>([]);
+  
   const [customer, setCustomer] = useState<Customer>({
     name: "",
     phone: "",
@@ -93,12 +107,17 @@ function Montar() {
     reference: "",
     notes: "",
   });
+  
   const [submitting, setSubmitting] = useState(false);
-  const [orderNumber, setOrderNumber] = useState<number | null>(null);
 
   const info = sizeInfo(size);
   const limit = info?.limit ?? 0;
-  const total = (info?.price ?? 0) + (shrimp ? SHRIMP_PRICE : 0);
+  const currentTotal = (info?.price ?? 0) + (shrimp ? SHRIMP_PRICE : 0);
+
+  const cartTotal = cartItems.reduce((acc, item) => acc + item.total, 0);
+  const deliveryFee = customer.orderType === "entrega" ? 7 : 0;
+  const isBuildingItem = size !== null;
+  const finalTotal = cartTotal + (isBuildingItem ? currentTotal : 0) + deliveryFee;
 
   const canAdvance = useMemo(() => {
     switch (step) {
@@ -146,110 +165,106 @@ function Montar() {
     setStep((s) => Math.min(s + 1, STEP_LABELS.length - 1));
   }
 
-  async function submitOrder() {
-    if (!size || !pasta || !sauce || !saute) return;
-    setSubmitting(true);
-    const { data, error } = await supabase.rpc("create_order", {
-      p_customer_name: customer.name,
-      p_phone: customer.phone,
-      p_order_type: customer.orderType,
-      p_address: customer.address,
-      p_number: customer.number,
-      p_complement: customer.complement,
-      p_neighborhood: customer.neighborhood,
-      p_reference: customer.reference,
-      p_size: size,
-      p_pasta_type: pasta,
-      p_sauce: sauce,
-      p_ingredients: ingredients,
-      p_shrimp: shrimp,
-      p_saute_type: saute,
-      p_finishing: finishing,
-      p_notes: customer.notes,
-    });
-    setSubmitting(false);
-
-    if (error) {
-      toast.error("Não foi possível enviar o pedido", { description: error.message });
-      return;
+  function addToCartAndAddAnother() {
+    if (!size || !pasta || !sauce || !saute) {
+        toast.error("Termine de montar a massa atual antes de adicionar outra.");
+        return;
     }
-    const row = (data as { order_number: number }[] | null)?.[0] ?? null;
-    setOrderNumber(row ? row.order_number : null);
-    toast.success("Pedido enviado para a cozinha!");
+    setCartItems((prev) => [
+      ...prev,
+      { size, pasta, sauce, ingredients, shrimp, saute, finishing, total: currentTotal },
+    ]);
+    setSize(null);
+    setPasta(null);
+    setSauce(null);
+    setIngredients([]);
+    setShrimp(false);
+    setSaute(null);
+    setFinishing([]);
+    setStep(0);
+    window.scrollTo({ top: 0, behavior: "smooth" });
+    toast.success("Massa adicionada! Monte a próxima.");
   }
 
-  if (orderNumber !== null) {
+  async function submitOrder() {
+    const hasCurrentItem = size && pasta && sauce && saute;
+    if (cartItems.length === 0 && !hasCurrentItem) return;
+
+    setSubmitting(true);
+
+    const allItems = [...cartItems];
+    if (hasCurrentItem) {
+      allItems.push({
+        size,
+        pasta,
+        sauce,
+        ingredients,
+        shrimp,
+        saute,
+        finishing,
+        total: currentTotal,
+      });
+    }
+
+    const orderNumbers: number[] = [];
+
+    for (const item of allItems) {
+      const { data, error } = await supabase.rpc("create_order", {
+        p_customer_name: customer.name,
+        p_phone: customer.phone,
+        p_order_type: customer.orderType,
+        p_address: customer.address,
+        p_number: customer.number,
+        p_complement: customer.complement,
+        p_neighborhood: customer.neighborhood,
+        p_reference: customer.reference,
+        p_size: item.size,
+        p_pasta_type: item.pasta,
+        p_sauce: item.sauce,
+        p_ingredients: item.ingredients,
+        p_shrimp: item.shrimp,
+        p_saute_type: item.saute,
+        p_finishing: item.finishing,
+        p_notes: customer.notes,
+      });
+
+      if (!error) {
+        const row = (data as { order_number: number }[] | null)?.[0] ?? null;
+        if (row) orderNumbers.push(row.order_number);
+      }
+    }
+
+    setSubmitting(false);
+
+    const itemsText = allItems
+      .map((item, idx) => {
+        return `*Massa ${idx + 1}:*\n- Tamanho: ${sizeInfo(item.size)?.label}\n- Massa: ${item.pasta}\n- Molho: ${item.sauce}\n- Ingredientes: ${item.ingredients.length ? item.ingredients.join(", ") : "nenhum"}\n- Camarão: ${item.shrimp ? "sim" : "não"}\n- Refogado: ${item.saute}\n- Finalização: ${item.finishing.length ? item.finishing.join(", ") : "nenhuma"}\n- Valor: ${brl(item.total)}`;
+      })
+      .join("\n\n");
+
     const waMessage = [
-      `*Pedido #${orderNumber}* — Sr e Sra Massas`,
-      `Cliente: ${customer.name}`,
+      `*Novo Pedido* — Sr e Sra Massas`,
+      orderNumbers.length > 0 ? `(Tickets no painel: #${orderNumbers.join(", #")})` : null,
+      ``,
+      `*Cliente:* ${customer.name}`,
       customer.orderType === "entrega"
-        ? `Entrega: ${customer.address}${customer.number ? `, ${customer.number}` : ""}${customer.complement ? ` - ${customer.complement}` : ""}${customer.neighborhood ? ` - ${customer.neighborhood}` : ""}`
+        ? `*Entrega:* ${customer.address}${customer.number ? `, ${customer.number}` : ""}${customer.complement ? ` - ${customer.complement}` : ""}${customer.neighborhood ? ` - ${customer.neighborhood}` : ""}`
         : customer.orderType === "retirada"
-          ? "Retirada no local"
-          : "Comer no local",
-      "",
-      `Tamanho: ${sizeInfo(size)?.label ?? size}`,
-      `Massa: ${pasta}`,
-      `Molho: ${sauce}`,
-      `Ingredientes: ${ingredients.length ? ingredients.join(", ") : "nenhum"}`,
-      shrimp ? `Camarão: sim (+${brl(SHRIMP_PRICE)})` : null,
-      `Refogado: ${saute}`,
-      finishing.length ? `Finalização: ${finishing.join(", ")}` : null,
-      customer.notes ? `Obs.: ${customer.notes}` : null,
-      "",
-      `Total: ${brl(total)}`,
+          ? "*Retirada no local*"
+          : "*Comer no local*",
+      customer.phone ? `*Telefone:* ${customer.phone}` : null,
+      customer.notes ? `*Obs. Gerais:* ${customer.notes}` : null,
+      ``,
+      itemsText,
+      ``,
+      customer.orderType === "entrega" ? `*Taxa de entrega:* ${brl(7)}` : null,
+      `*TOTAL DO PEDIDO: ${brl(finalTotal)}*`,
     ]
-      .filter(Boolean)
+      .filter((line) => line !== null)
       .join("\n");
 
-    return (
-      <div className="min-h-screen bg-background">
-        <SiteHeader />
-        <main className="mx-auto flex max-w-xl flex-col items-center px-6 py-16 text-center">
-          <Logo size={96} />
-          <span className="mt-8 flex size-14 items-center justify-center rounded-full bg-gold/15 text-gold">
-            <PartyPopper className="size-7" />
-          </span>
-          <h1 className="animate-rise mt-6 font-display text-3xl font-bold text-foreground">
-            Pedido confirmado!
-          </h1>
-          <p className="mt-2 text-sm text-muted-foreground">
-            Recebemos seu pedido e a cozinha já foi avisada.
-          </p>
-          <div className="panel mt-8 w-full p-8">
-            <p className="text-xs tracking-[0.25em] text-muted-foreground">SEU PEDIDO</p>
-            <p className="font-display text-5xl font-bold text-gradient-gold">#{orderNumber}</p>
-            <p className="mt-4 text-sm text-muted-foreground">
-              Guarde este número — use ele junto do seu telefone para acompanhar o status.
-            </p>
-            <p className="mt-4 font-display text-2xl font-bold text-gold">{brl(total)}</p>
-          </div>
-          <div className="mt-8 flex w-full flex-col gap-3 sm:flex-row">
-            <Button asChild variant="gold" size="lg" className="flex-1">
-              <a
-                href={whatsappLink(RESTAURANT_WHATSAPP, waMessage)}
-                target="_blank"
-                rel="noreferrer"
-              >
-                <MessageCircle /> ENVIAR NO WHATSAPP
-              </a>
-            </Button>
-            <Button asChild variant="goldOutline" size="lg" className="flex-1">
-              <Link to="/acompanhar" search={{ pedido: String(orderNumber) }}>
-                ACOMPANHAR PEDIDO
-              </Link>
-            </Button>
-            <Button asChild variant="goldOutline" size="lg" className="flex-1">
-              <Link to="/">Voltar ao início</Link>
-            </Button>
-          </div>
-          <p className="mt-4 text-xs text-muted-foreground">
-            Dúvidas? Fale com a gente no WhatsApp {RESTAURANT_WHATSAPP_LABEL}
-          </p>
-        </main>
-        <SiteFooter />
-      </div>
-    );
+    const link = whatsappLink(RESTAURANT_WHATSAPP, waMessage);
+    window.location.href = link;
   }
 
   return (
@@ -419,15 +434,15 @@ function Montar() {
                     />
                   </Field>
                   {customer.orderType === "local" ? null : (
-                  <Field label="Telefone / WhatsApp">
-                    <Input
-                      value={customer.phone}
-                      maxLength={20}
-                      inputMode="tel"
-                      placeholder="(00) 00000-0000"
-                      onChange={(e) => setCustomer({ ...customer, phone: e.target.value })}
-                    />
-                  </Field>
+                    <Field label="Telefone / WhatsApp">
+                      <Input
+                        value={customer.phone}
+                        maxLength={20}
+                        inputMode="tel"
+                        placeholder="(00) 00000-0000"
+                        onChange={(e) => setCustomer({ ...customer, phone: e.target.value })}
+                      />
+                    </Field>
                   )}
                 </div>
 
@@ -502,43 +517,76 @@ function Montar() {
           ) : null}
 
           {step === 8 ? (
-            <StepShell title="Seu macarrão" subtitle="Confira tudo antes de confirmar.">
-              <div className="panel divide-y divide-border/70">
-                <SummaryRow label="Tamanho" value={info?.label ?? "-"} extra={brl(info?.price ?? 0)} />
-                <SummaryRow label="Massa" value={pasta ?? "-"} />
-                <SummaryRow label="Molho" value={sauce ?? "-"} />
-                <SummaryRow label="Ingredientes" list={ingredients} />
-                <SummaryRow
-                  label="Camarão"
-                  value={shrimp ? "Sim" : "Não"}
-                  extra={shrimp ? `+ ${brl(SHRIMP_PRICE)}` : undefined}
-                />
-                <SummaryRow label="Refogado" value={saute ?? "-"} />
-                <SummaryRow label="Finalização" list={finishing} />
-                <SummaryRow
-                  label="Cliente"
-                  value={
-                    customer.orderType === "local"
-                      ? customer.name
-                      : `${customer.name} · ${customer.phone}`
-                  }
-                />
-                <SummaryRow
-                  label="Pedido"
-                  value={
-                    customer.orderType === "entrega"
-                      ? `${customer.address}, ${customer.number} — ${customer.neighborhood}`
-                      : customer.orderType === "local"
-                        ? "Comer no local"
-                        : "Retirada no restaurante"
-                  }
-                />
-                {customer.notes ? <SummaryRow label="Observações" value={customer.notes} /> : null}
-                <div className="flex items-center justify-between p-5">
-                  <span className="font-display text-lg font-bold text-foreground">TOTAL</span>
-                  <span className="font-display text-3xl font-bold text-gradient-gold">
-                    {brl(total)}
-                  </span>
+            <StepShell title="Resumo" subtitle="Confira tudo antes de confirmar.">
+              <div className="space-y-4">
+                {cartItems.map((item, idx) => (
+                  <div key={idx} className="panel divide-y divide-border/70 relative">
+                    <div className="p-4 bg-gold/5 font-bold text-gold border-b border-border/70 flex justify-between">
+                      <span>Massa {idx + 1}</span>
+                      <span>{brl(item.total)}</span>
+                    </div>
+                    <SummaryRow label="Tamanho" value={sizeInfo(item.size)?.label ?? "-"} />
+                    <SummaryRow label="Massa" value={item.pasta ?? "-"} />
+                    <SummaryRow label="Molho" value={item.sauce ?? "-"} />
+                    <SummaryRow label="Ingredientes" list={item.ingredients} />
+                    {item.shrimp && <SummaryRow label="Camarão" value="Sim" extra={`+ ${brl(SHRIMP_PRICE)}`} />}
+                    <SummaryRow label="Refogado" value={item.saute ?? "-"} />
+                    <SummaryRow label="Finalização" list={item.finishing} />
+                  </div>
+                ))}
+
+                {isBuildingItem && (
+                  <div className="panel divide-y divide-border/70 relative border-gold/50 shadow-gold/10 shadow-lg">
+                    <div className="p-4 bg-gold/10 font-bold text-gold border-b border-border/70 flex justify-between">
+                      <span>Massa {cartItems.length + 1} (Atual)</span>
+                      <span>{brl(currentTotal)}</span>
+                    </div>
+                    <SummaryRow label="Tamanho" value={info?.label ?? "-"} extra={brl(info?.price ?? 0)} />
+                    <SummaryRow label="Massa" value={pasta ?? "-"} />
+                    <SummaryRow label="Molho" value={sauce ?? "-"} />
+                    <SummaryRow label="Ingredientes" list={ingredients} />
+                    {shrimp && <SummaryRow label="Camarão" value="Sim" extra={`+ ${brl(SHRIMP_PRICE)}`} />}
+                    <SummaryRow label="Refogado" value={saute ?? "-"} />
+                    <SummaryRow label="Finalização" list={finishing} />
+                  </div>
+                )}
+                
+                <Button variant="outline" className="w-full mt-4" onClick={addToCartAndAddAnother}>
+                  <Plus className="mr-2" /> ADICIONAR OUTRA MASSA AO PEDIDO
+                </Button>
+
+                <div className="panel divide-y divide-border/70 mt-8">
+                  <div className="p-4 bg-muted/30 font-bold border-b border-border/70">
+                    Dados do Cliente
+                  </div>
+                  <SummaryRow
+                    label="Cliente"
+                    value={
+                      customer.orderType === "local"
+                        ? customer.name
+                        : `${customer.name} · ${customer.phone}`
+                    }
+                  />
+                  <SummaryRow
+                    label="Pedido"
+                    value={
+                      customer.orderType === "entrega"
+                        ? `${customer.address}, ${customer.number} — ${customer.neighborhood}`
+                        : customer.orderType === "local"
+                          ? "Comer no local"
+                          : "Retirada no restaurante"
+                    }
+                  />
+                  {customer.orderType === "entrega" && (
+                    <SummaryRow label="Taxa de Entrega" value="Fixo" extra={brl(7)} />
+                  )}
+                  {customer.notes ? <SummaryRow label="Observações" value={customer.notes} /> : null}
+                  <div className="flex items-center justify-between p-5">
+                    <span className="font-display text-lg font-bold text-foreground">TOTAL DO PEDIDO</span>
+                    <span className="font-display text-3xl font-bold text-gradient-gold">
+                      {brl(finalTotal)}
+                    </span>
+                  </div>
                 </div>
               </div>
 
@@ -547,11 +595,11 @@ function Montar() {
                   variant="gold"
                   size="xl"
                   className="flex-1"
-                  disabled={submitting}
+                  disabled={submitting || (cartItems.length === 0 && !isBuildingItem)}
                   onClick={submitOrder}
                 >
-                  {submitting ? <Loader2 className="animate-spin" /> : <CheckCircle2 />}
-                  CONFIRMAR PEDIDO
+                  {submitting ? <Loader2 className="animate-spin" /> : <MessageCircle />}
+                  ENVIAR NO WHATSAPP
                 </Button>
                 <Button
                   variant="goldOutline"
@@ -580,8 +628,8 @@ function Montar() {
             <span className="hidden sm:inline">Voltar</span>
           </Button>
           <div className="flex-1 text-right sm:text-left">
-            <p className="text-[11px] text-muted-foreground">Total</p>
-            <p className="font-display text-xl font-bold text-gold">{brl(total)}</p>
+            <p className="text-[11px] text-muted-foreground">Total do Pedido</p>
+            <p className="font-display text-xl font-bold text-gold">{brl(finalTotal)}</p>
           </div>
           {step < STEP_LABELS.length - 1 ? (
             <Button variant="gold" size="lg" onClick={next} disabled={!canAdvance}>

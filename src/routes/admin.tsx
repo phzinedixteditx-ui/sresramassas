@@ -266,6 +266,16 @@ function Dashboard() {
     toast.success(`Pedido #${order.order_number} atualizado`);
   }
 
+  async function cancelOrder(order: AdminOrder) {
+    const { error } = await supabase.from("orders").delete().eq("id", order.id);
+    if (error) {
+      toast.error("Não foi possível excluir o pedido", { description: error.message });
+      return;
+    }
+    setOrders((prev) => prev.filter((o) => o.id !== order.id));
+    toast.success(`Pedido #${order.order_number} cancelado e excluído.`);
+  }
+
   const todayTotal = orders
     .filter((o) => new Date(o.created_at).toDateString() === new Date().toDateString())
     .reduce((sum, o) => sum + Number(o.total), 0);
@@ -322,7 +332,7 @@ function Dashboard() {
                   </div>
                   <div className="space-y-3">
                     {columnOrders.map((order) => (
-                      <OrderCard key={order.id} order={order} onAdvance={advance} />
+                      <OrderCard key={order.id} order={order} onAdvance={advance} onCancel={cancelOrder} />
                     ))}
                     {columnOrders.length === 0 ? (
                       <p className="rounded-xl border border-dashed border-border px-4 py-6 text-center text-xs text-muted-foreground">

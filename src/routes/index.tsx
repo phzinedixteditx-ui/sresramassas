@@ -30,7 +30,7 @@ export const Route = createFileRoute("/")({
 const STEPS = [
   { icon: UtensilsCrossed, title: "Escolha o tamanho", text: "Pequeno com 6 ou grande com 8 adicionais." },
   { icon: ChefHat, title: "Monte do seu jeito", text: "Massa, molho, ingredientes e finalização." },
-  { icon: Clock, title: "Acompanhe em tempo real", text: "Do preparo até a entrega, sem mistério." },
+  { icon: Clock, title: "Peça direto pelo WhatsApp", text: "Tudo rápido e prático direto no nosso WhatsApp." },
 ];
 
 function Index() {

@@ -1,7 +1,17 @@
-import { Bike, Check, ChefHat, MessageCircle, PackageCheck, X } from "lucide-react";
+import { Bike, Check, ChefHat, Clock, MessageCircle, PackageCheck, X } from "lucide-react";
 
 import { Button } from "@/components/ui/button";
 import { brl, whatsappLink, type OrderStatus } from "@/lib/menu";
+
+function formatDateTime(iso: string) {
+  const d = new Date(iso);
+  return d.toLocaleString("pt-BR", {
+    day: "2-digit",
+    month: "2-digit",
+    hour: "2-digit",
+    minute: "2-digit",
+  });
+}
 
 export type AdminOrder = {
   id: string;
@@ -64,6 +74,9 @@ export function OrderCard({
         <div>
           <p className="text-[10px] tracking-[0.15em] text-muted-foreground uppercase">{orderNums}</p>
           <p className="font-display text-base font-bold text-foreground mt-0.5">{first.customer_name}</p>
+          <p className="mt-0.5 inline-flex items-center gap-1 text-[10px] text-muted-foreground">
+            <Clock className="size-3" /> {formatDateTime(first.created_at)}
+          </p>
           {first.phone ? (
             <a
               className="mt-0.5 inline-flex items-center gap-1 text-xs text-gold underline-offset-4 hover:underline"

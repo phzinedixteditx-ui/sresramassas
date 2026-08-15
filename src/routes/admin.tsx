@@ -1,5 +1,5 @@
 import { createFileRoute } from "@tanstack/react-router";
-import { Bell, Loader2, LogOut, RefreshCw } from "lucide-react";
+import { Bell, Loader as Loader2, LogOut, RefreshCw, Trash2 } from "lucide-react";
 import { useCallback, useEffect, useState } from "react";
 import { toast } from "sonner";
 
@@ -305,6 +305,28 @@ function Dashboard() {
     toast.success(`Pedido ${nums} cancelado e excluido.`);
   }
 
+  async function clearOldOrders() {
+    const twoHoursAgo = new Date(Date.now() - 2 * 60 * 60 * 1000).toISOString();
+    if (
+      !window.confirm(
+        "Excluir todos os pedidos concluídos ou com mais de 2 horas? Esta ação não pode ser desfeita.",
+      )
+    )
+      return;
+    const { error } = await supabase
+      .from("orders")
+      .delete()
+      .or(`status.eq.concluido,created_at.lt.${twoHoursAgo}`);
+    if (error) {
+      toast.error("Não foi possível limpar os pedidos", { description: error.message });
+      return;
+    }
+    setOrders((prev) =>
+      prev.filter((o) => o.status !== "concluido" && new Date(o.created_at) > new Date(Date.now() - 2 * 60 * 60 * 1000)),
+    );
+    toast.success("Pedidos antigos foram excluídos.");
+  }
+
   const todayTotal = orders
     .filter((o) => new Date(o.created_at).toDateString() === new Date().toDateString())
     .reduce((sum, o) => sum + Number(o.total), 0);
@@ -330,6 +352,9 @@ function Dashboard() {
             </span>
             <Button variant="ghost" size="icon" onClick={() => void load()} aria-label="Atualizar">
               <RefreshCw />
+            </Button>
+            <Button variant="goldOutline" size="sm" onClick={() => void clearOldOrders()}>
+              <Trash2 /> Limpar antigos
             </Button>
             <Button variant="goldOutline" size="sm" onClick={() => void supabase.auth.signOut()}>
               <LogOut /> Sair

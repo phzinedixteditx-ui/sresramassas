@@ -1,5 +1,5 @@
 import { createFileRoute, Link } from "@tanstack/react-router";
-import { ChefHat, Clock, Heart, ShoppingBag, Sparkles, UtensilsCrossed } from "lucide-react";
+import { ChefHat, Heart, MessageCircle, ShoppingBag, Sparkles, UtensilsCrossed } from "lucide-react";
 
 import heroImage from "@/assets/hero-massa.jpg";
 import { Logo } from "@/components/brand/Logo";
@@ -30,7 +30,7 @@ export const Route = createFileRoute("/")({
 const STEPS = [
   { icon: UtensilsCrossed, title: "Escolha o tamanho", text: "Pequeno com 6 ou grande com 8 adicionais." },
   { icon: ChefHat, title: "Monte do seu jeito", text: "Massa, molho, ingredientes e finalização." },
-  { icon: Clock, title: "Acompanhe em tempo real", text: "Do preparo até a entrega, sem mistério." },
+  { icon: MessageCircle, title: "Envie pelo WhatsApp", text: "Confirme e envie seu pedido direto para a cozinha." },
 ];
 
 function Index() {

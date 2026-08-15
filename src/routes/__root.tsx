@@ -88,7 +88,7 @@ export const Route = createRootRouteWithContext<{ queryClient: QueryClient }>()(
       { property: "og:title", content: "Sr e Sra Massas — Monte sua massa do seu jeito" },
       {
         property: "og:description",
-        content: "Escolha sua massa, molho, ingredientes e finalização. Pedido online e acompanhamento em tempo real.",
+        content: "Escolha sua massa, molho, ingredientes e finalização. Confirme e envie seu pedido pelo WhatsApp.",
       },
       { property: "og:type", content: "website" },
       { name: "twitter:card", content: "summary_large_image" },

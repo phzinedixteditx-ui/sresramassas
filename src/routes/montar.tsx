@@ -81,6 +81,7 @@ type CartItem = {
   shrimp: boolean;
   saute: string;
   finishing: string[];
+  massaLabel: string;
   total: number;
 };
 
@@ -95,6 +96,7 @@ function Montar() {
   const [shrimp, setShrimp] = useState(false);
   const [saute, setSaute] = useState<string | null>(null);
   const [finishing, setFinishing] = useState<string[]>([]);
+  const [massaLabel, setMassaLabel] = useState("");
   
   const [customer, setCustomer] = useState<Customer>({
     name: "",
@@ -172,7 +174,7 @@ function Montar() {
     }
     setCartItems((prev) => [
       ...prev,
-      { size, pasta, sauce, ingredients, shrimp, saute, finishing, total: currentTotal },
+      { size, pasta, sauce, ingredients, shrimp, saute, finishing, massaLabel, total: currentTotal },
     ]);
     setSize(null);
     setPasta(null);
@@ -181,6 +183,7 @@ function Montar() {
     setShrimp(false);
     setSaute(null);
     setFinishing([]);
+    setMassaLabel("");
     setStep(0);
     window.scrollTo({ top: 0, behavior: "smooth" });
     toast.success("Massa adicionada! Monte a próxima.");
@@ -202,6 +205,7 @@ function Montar() {
         shrimp,
         saute,
         finishing,
+        massaLabel,
         total: currentTotal,
       });
     }
@@ -225,7 +229,9 @@ function Montar() {
         p_shrimp: item.shrimp,
         p_saute_type: item.saute,
         p_finishing: item.finishing,
-        p_notes: customer.notes,
+        p_notes: item.massaLabel
+          ? `[Para: ${item.massaLabel}]${customer.notes ? ` ${customer.notes}` : ""}`
+          : customer.notes,
       });
 
       if (!error) {
@@ -238,7 +244,8 @@ function Montar() {
 
     const itemsText = allItems
       .map((item, idx) => {
-        return `*Massa ${idx + 1}:*\n- Tamanho: ${sizeInfo(item.size)?.label}\n- Massa: ${item.pasta}\n- Molho: ${item.sauce}\n- Ingredientes: ${item.ingredients.length ? item.ingredients.join(", ") : "nenhum"}\n- Camarão: ${item.shrimp ? "sim" : "não"}\n- Refogado: ${item.saute}\n- Finalização: ${item.finishing.length ? item.finishing.join(", ") : "nenhuma"}\n- Valor: ${brl(item.total)}`;
+        const labelLine = item.massaLabel ? `- Para: *${item.massaLabel}*\n` : "";
+        return `*Massa ${idx + 1}:*\n${labelLine}- Tamanho: ${sizeInfo(item.size)?.label}\n- Massa: ${item.pasta}\n- Molho: ${item.sauce}\n- Ingredientes: ${item.ingredients.length ? item.ingredients.join(", ") : "nenhum"}\n- Camarão: ${item.shrimp ? "sim" : "não"}\n- Refogado: ${item.saute}\n- Finalização: ${item.finishing.length ? item.finishing.join(", ") : "nenhuma"}\n- Valor: ${brl(item.total)}`;
       })
       .join("\n\n");
 
@@ -413,6 +420,19 @@ function Montar() {
                     }
                   />
                 ))}
+              </div>
+              <div className="mt-5">
+                <Field label="Para quem é essa massa? (opcional)">
+                  <Input
+                    value={massaLabel}
+                    maxLength={50}
+                    placeholder="Ex.: João, Maria, Eu..."
+                    onChange={(e) => setMassaLabel(e.target.value)}
+                  />
+                </Field>
+                <p className="mt-1.5 text-xs text-muted-foreground">
+                  A cozinha vai colocar esse nome na embalagem.
+                </p>
               </div>
             </StepShell>
           ) : null}

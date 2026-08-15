@@ -257,23 +257,52 @@ function Dashboard() {
     };
   }, [load]);
 
-  async function advance(order: AdminOrder, status: OrderStatus) {
-    const { error } = await supabase.from("orders").update({ status }).eq("id", order.id);
-    if (error) {
-      toast.error("Não foi possível atualizar", { description: error.message });
-      return;
+  // Agrupa pedidos do mesmo cliente feitos em janela de 10 minutos
+  function groupOrders(list: AdminOrder[]): AdminOrder[][] {
+    const groups: AdminOrder[][] = [];
+    const used = new Set<string>();
+    for (const order of list) {
+      if (used.has(order.id)) continue;
+      const t = new Date(order.created_at).getTime();
+      const group = list.filter((o) => {
+        if (used.has(o.id)) return false;
+        const ot = new Date(o.created_at).getTime();
+        return (
+          o.customer_name === order.customer_name &&
+          o.phone === order.phone &&
+          Math.abs(ot - t) <= 10 * 60 * 1000
+        );
+      });
+      group.forEach((o) => used.add(o.id));
+      groups.push(group);
     }
-    toast.success(`Pedido #${order.order_number} atualizado`);
+    return groups;
   }
 
-  async function cancelOrder(order: AdminOrder) {
-    const { error } = await supabase.from("orders").delete().eq("id", order.id);
-    if (error) {
-      toast.error("Não foi possível excluir o pedido", { description: error.message });
-      return;
+  async function advance(orderGroup: AdminOrder[], status: OrderStatus) {
+    for (const order of orderGroup) {
+      const { error } = await supabase.from("orders").update({ status }).eq("id", order.id);
+      if (error) {
+        toast.error("Nao foi possivel atualizar", { description: error.message });
+        return;
+      }
     }
-    setOrders((prev) => prev.filter((o) => o.id !== order.id));
-    toast.success(`Pedido #${order.order_number} cancelado e excluído.`);
+    const nums = orderGroup.map((o) => `#${o.order_number}`).join(", ");
+    toast.success(`Pedido ${nums} atualizado`);
+  }
+
+  async function cancelOrder(orderGroup: AdminOrder[]) {
+    for (const order of orderGroup) {
+      const { error } = await supabase.from("orders").delete().eq("id", order.id);
+      if (error) {
+        toast.error("Nao foi possivel excluir", { description: error.message });
+        return;
+      }
+    }
+    const ids = new Set(orderGroup.map((o) => o.id));
+    setOrders((prev) => prev.filter((o) => !ids.has(o.id)));
+    const nums = orderGroup.map((o) => `#${o.order_number}`).join(", ");
+    toast.success(`Pedido ${nums} cancelado e excluido.`);
   }
 
   const todayTotal = orders
@@ -320,6 +349,7 @@ function Dashboard() {
           <div className="grid gap-4 md:grid-cols-2 xl:grid-cols-5">
             {STATUS_FLOW.map((column) => {
               const columnOrders = orders.filter((o) => o.status === column.id);
+              const groups = groupOrders(columnOrders);
               return (
                 <section key={column.id} className="flex flex-col gap-3">
                   <div className="flex items-center justify-between rounded-xl border border-border bg-secondary/40 px-4 py-2.5">
@@ -327,14 +357,19 @@ function Dashboard() {
                       {column.label}
                     </span>
                     <span className="rounded-full bg-gold/15 px-2 py-0.5 text-xs font-bold text-gold">
-                      {columnOrders.length}
+                      {groups.length}
                     </span>
                   </div>
                   <div className="space-y-3">
-                    {columnOrders.map((order) => (
-                      <OrderCard key={order.id} order={order} onAdvance={advance} onCancel={cancelOrder} />
+                    {groups.map((group) => (
+                      <OrderCard
+                        key={group.map((o) => o.id).join("-")}
+                        orders={group}
+                        onAdvance={advance}
+                        onCancel={cancelOrder}
+                      />
                     ))}
-                    {columnOrders.length === 0 ? (
+                    {groups.length === 0 ? (
                       <p className="rounded-xl border border-dashed border-border px-4 py-6 text-center text-xs text-muted-foreground">
                         Nenhum pedido
                       </p>

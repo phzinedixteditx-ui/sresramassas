@@ -30,7 +30,7 @@ export type AdminOrder = {
 };
 
 const NEXT: Record<OrderStatus, { status: OrderStatus; label: string; icon: typeof Check } | null> = {
-  novo: { status: "em_preparo", label: "COMEÇAR PREPARO", icon: ChefHat },
+  novo: { status: "em_preparo", label: "COMECAR PREPARO", icon: ChefHat },
   em_preparo: { status: "pronto", label: "MARCAR COMO PRONTO", icon: PackageCheck },
   pronto: { status: "saiu_entrega", label: "SAIU PARA ENTREGA", icon: Bike },
   saiu_entrega: { status: "concluido", label: "CONCLUIR PEDIDO", icon: Check },
@@ -38,34 +38,40 @@ const NEXT: Record<OrderStatus, { status: OrderStatus; label: string; icon: type
 };
 
 export function OrderCard({
-  order,
+  orders,
   onAdvance,
   onCancel,
 }: {
-  order: AdminOrder;
-  onAdvance: (order: AdminOrder, status: OrderStatus) => void;
-  onCancel: (order: AdminOrder) => void;
+  orders: AdminOrder[];
+  onAdvance: (orders: AdminOrder[], status: OrderStatus) => void;
+  onCancel: (orders: AdminOrder[]) => void;
 }) {
-  const next = NEXT[order.status];
+  const first = orders[0];
+  const status = first.status;
+  const next = NEXT[status];
   const nextForPickup =
-    order.order_type !== "entrega" && order.status === "pronto"
+    first.order_type !== "entrega" && status === "pronto"
       ? { status: "concluido" as OrderStatus, label: "CONCLUIR PEDIDO", icon: Check }
       : next;
 
+  const groupTotal = orders.reduce((acc, o) => acc + Number(o.total), 0);
+  const orderNums = orders.map((o) => `#${o.order_number}`).join(", ");
+
   return (
     <article className="animate-rise panel p-4">
+      {/* Header do cliente */}
       <header className="flex items-start justify-between gap-2">
         <div>
-          <p className="font-display text-lg font-bold text-gold">#{order.order_number}</p>
-          <p className="text-sm font-medium text-foreground">{order.customer_name}</p>
-          {order.phone ? (
+          <p className="text-[10px] tracking-[0.15em] text-muted-foreground uppercase">{orderNums}</p>
+          <p className="font-display text-base font-bold text-foreground mt-0.5">{first.customer_name}</p>
+          {first.phone ? (
             <a
               className="mt-0.5 inline-flex items-center gap-1 text-xs text-gold underline-offset-4 hover:underline"
-              href={whatsappLink(order.phone, `Olá ${order.customer_name}, aqui é do Sr e Sra Massas sobre o pedido #${order.order_number}.`)}
+              href={whatsappLink(first.phone, `Ola ${first.customer_name}, aqui e do Sr e Sra Massas sobre o seu pedido.`)}
               target="_blank"
               rel="noreferrer"
             >
-              <MessageCircle className="size-3" /> {order.phone}
+              <MessageCircle className="size-3" /> {first.phone}
             </a>
           ) : null}
         </div>
@@ -75,92 +81,97 @@ export function OrderCard({
             className="rounded-full bg-red-500/10 p-1.5 text-red-500 transition-colors hover:bg-red-500/20"
             title="Cancelar e remover pedido"
             onClick={() => {
-              if (window.confirm(`Tem certeza que deseja cancelar o pedido #${order.order_number}? Ele será excluído do painel.`)) {
-                onCancel(order);
+              const nums = orders.map((o) => `#${o.order_number}`).join(", ");
+              if (window.confirm(`Cancelar o(s) pedido(s) ${nums} de ${first.customer_name}? Eles serao excluidos do painel.`)) {
+                onCancel(orders);
               }
             }}
           >
             <X className="size-4" />
           </button>
           <span className="rounded-full border border-gold/40 px-2 py-0.5 text-[10px] tracking-wide text-gold uppercase">
-            {order.order_type === "local" ? "no local" : order.order_type}
+            {first.order_type === "local" ? "no local" : first.order_type}
           </span>
         </div>
       </header>
 
-      <div className="mt-3 space-y-2 border-t border-border/70 pt-3 text-xs">
-        <p className="font-display text-sm font-bold text-foreground uppercase">
-          {order.size} · {order.pasta_type}
-        </p>
-        <Line label="Molho" value={order.sauce} />
-        <Line label="Refogado" value={order.saute_type} />
-        {order.ingredients.length ? (
-          <div>
-            <p className="text-[10px] tracking-[0.15em] text-muted-foreground uppercase">
-              Ingredientes
+      {/* Massas do pedido */}
+      <div className="mt-3 space-y-3 border-t border-border/70 pt-3">
+        {orders.map((order, idx) => (
+          <div key={order.id} className="space-y-1.5 text-xs">
+            {orders.length > 1 && (
+              <p className="font-display text-[10px] font-bold tracking-widest text-gold uppercase">
+                — Massa {idx + 1}
+              </p>
+            )}
+            <p className="font-display text-sm font-bold text-foreground uppercase">
+              {order.size} · {order.pasta_type}
             </p>
-            <ul className="mt-1 grid grid-cols-2 gap-x-2 text-foreground">
-              {order.ingredients.map((i) => (
-                <li key={i}>✓ {i}</li>
-              ))}
-            </ul>
-          </div>
-        ) : null}
-        {order.shrimp ? (
-          <p className="font-semibold text-gold">
-            ✓ CAMARÃO + {brl(Number(order.shrimp_price))}
-          </p>
-        ) : null}
-        {order.finishing.length ? (
-          <div>
-            <p className="text-[10px] tracking-[0.15em] text-muted-foreground uppercase">
-              Finalização
-            </p>
-            <ul className="mt-1 grid grid-cols-2 gap-x-2 text-foreground">
-              {order.finishing.map((f) => (
-                <li key={f}>✓ {f}</li>
-              ))}
-            </ul>
-          </div>
-        ) : null}
-        {order.order_type === "entrega" ? (
-          <div className="rounded-lg border border-gold/40 bg-gold/8 px-2.5 py-2">
-            <p className="text-[10px] tracking-[0.15em] text-gold uppercase">
-              Endereço de entrega
-            </p>
-            <p className="mt-1 font-medium text-foreground">
-              {order.address}
-              {order.number ? `, ${order.number}` : ""}
-              {order.complement ? ` · ${order.complement}` : ""}
-            </p>
-            {order.neighborhood ? (
-              <p className="text-foreground">Bairro: {order.neighborhood}</p>
+            <Line label="Molho" value={order.sauce} />
+            <Line label="Refogado" value={order.saute_type} />
+            {order.ingredients.length ? (
+              <div>
+                <p className="text-[10px] tracking-[0.15em] text-muted-foreground uppercase">Ingredientes</p>
+                <ul className="mt-1 grid grid-cols-2 gap-x-2 text-foreground">
+                  {order.ingredients.map((i) => (
+                    <li key={i}>✓ {i}</li>
+                  ))}
+                </ul>
+              </div>
             ) : null}
-            {order.reference ? (
-              <p className="text-muted-foreground">Ref.: {order.reference}</p>
+            {order.shrimp ? (
+              <p className="font-semibold text-gold">✓ CAMARAO + {brl(Number(order.shrimp_price))}</p>
             ) : null}
-            {order.phone ? (
-              <a
-                className="mt-1 inline-block text-gold underline-offset-4 hover:underline"
-                href={whatsappLink(order.phone)}
-                target="_blank"
-                rel="noreferrer"
-              >
-                📞 {order.phone}
-              </a>
+            {order.finishing.length ? (
+              <div>
+                <p className="text-[10px] tracking-[0.15em] text-muted-foreground uppercase">Finalizacao</p>
+                <ul className="mt-1 grid grid-cols-2 gap-x-2 text-foreground">
+                  {order.finishing.map((f) => (
+                    <li key={f}>✓ {f}</li>
+                  ))}
+                </ul>
+              </div>
             ) : null}
           </div>
-        ) : null}
-        {order.notes ? (
-          <p className="rounded-lg border border-gold/30 bg-gold/8 px-2 py-1.5 text-foreground">
-            <span className="text-gold">OBS:</span> {order.notes}
-          </p>
-        ) : null}
+        ))}
       </div>
 
+      {/* Endereco (uma vez so, pois e o mesmo para todas as massas) */}
+      {first.order_type === "entrega" ? (
+        <div className="mt-3 rounded-lg border border-gold/40 bg-gold/8 px-2.5 py-2 text-xs">
+          <p className="text-[10px] tracking-[0.15em] text-gold uppercase">Endereco de entrega</p>
+          <p className="mt-1 font-medium text-foreground">
+            {first.address}
+            {first.number ? `, ${first.number}` : ""}
+            {first.complement ? ` · ${first.complement}` : ""}
+          </p>
+          {first.neighborhood ? <p className="text-foreground">Bairro: {first.neighborhood}</p> : null}
+          {first.reference ? <p className="text-muted-foreground">Ref.: {first.reference}</p> : null}
+          {first.phone ? (
+            <a
+              className="mt-1 inline-block text-gold underline-offset-4 hover:underline"
+              href={whatsappLink(first.phone)}
+              target="_blank"
+              rel="noreferrer"
+            >
+              Whatsapp: {first.phone}
+            </a>
+          ) : null}
+        </div>
+      ) : null}
+
+      {first.notes ? (
+        <p className="mt-2 text-xs rounded-lg border border-gold/30 bg-gold/8 px-2 py-1.5 text-foreground">
+          <span className="text-gold">OBS:</span> {first.notes}
+        </p>
+      ) : null}
+
+      {/* Total */}
       <div className="mt-3 flex items-center justify-between border-t border-border/70 pt-3">
-        <span className="text-[10px] tracking-[0.15em] text-muted-foreground uppercase">Total</span>
-        <span className="font-display text-xl font-bold text-gold">{brl(Number(order.total))}</span>
+        <span className="text-[10px] tracking-[0.15em] text-muted-foreground uppercase">
+          Total {orders.length > 1 ? `(${orders.length} massas)` : ""}
+        </span>
+        <span className="font-display text-xl font-bold text-gold">{brl(groupTotal)}</span>
       </div>
 
       {nextForPickup ? (
@@ -168,7 +179,7 @@ export function OrderCard({
           variant="gold"
           size="sm"
           className="mt-3 w-full"
-          onClick={() => onAdvance(order, nextForPickup.status)}
+          onClick={() => onAdvance(orders, nextForPickup.status)}
         >
           <nextForPickup.icon /> {nextForPickup.label}
         </Button>

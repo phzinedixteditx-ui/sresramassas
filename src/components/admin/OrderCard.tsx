@@ -21,7 +21,6 @@ export type AdminOrder = {
   ingredients: string[];
   shrimp: boolean;
   shrimp_price: number;
-  delivery_fee: number;
   saute_type: string;
   finishing: string[];
   notes: string | null;
@@ -134,7 +133,6 @@ export function OrderCard({
                 📞 {order.phone}
               </a>
             ) : null}
-            <p className="mt-1 font-semibold text-gold">Taxa de entrega: {brl(Number(order.delivery_fee))}</p>
           </div>
         ) : null}
         {order.notes ? (

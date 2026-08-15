@@ -21,7 +21,6 @@ export type Database = {
           complement: string | null
           created_at: string
           customer_name: string
-          delivery_fee: number
           finishing: string[]
           id: string
           ingredients: string[]
@@ -48,7 +47,6 @@ export type Database = {
           complement?: string | null
           created_at?: string
           customer_name: string
-          delivery_fee?: number
           finishing?: string[]
           id?: string
           ingredients?: string[]
@@ -75,7 +73,6 @@ export type Database = {
           complement?: string | null
           created_at?: string
           customer_name?: string
-          delivery_fee?: number
           finishing?: string[]
           id?: string
           ingredients?: string[]

@@ -6,7 +6,6 @@ export const SIZES: { id: SizeId; label: string; price: number; limit: number }[
 ];
 
 export const SHRIMP_PRICE = 10;
-export const DELIVERY_FEE = 7;
 
 /** WhatsApp oficial do restaurante (somente dígitos, com DDI) */
 export const RESTAURANT_WHATSAPP = "5531999101195";

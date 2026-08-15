@@ -1,5 +1,5 @@
 import { createFileRoute, Link } from "@tanstack/react-router";
-import { ArrowLeft, ArrowRight, CheckCircle2, Loader2, MessageCircle, PartyPopper, Plus } from "lucide-react";
+import { ArrowLeft, ArrowRight, CheckCircle2, Loader2, MessageCircle, PartyPopper } from "lucide-react";
 import { useMemo, useState } from "react";
 import { toast } from "sonner";
 
@@ -15,7 +15,6 @@ import { Textarea } from "@/components/ui/textarea";
 import { supabase } from "@/integrations/supabase/client";
 import {
   brl,
-  DELIVERY_FEE,
   FINISHINGS,
   INGREDIENTS,
   PASTAS,
@@ -99,8 +98,7 @@ function Montar() {
 
   const info = sizeInfo(size);
   const limit = info?.limit ?? 0;
-  const deliveryFee = customer.orderType === "entrega" ? DELIVERY_FEE : 0;
-  const total = (info?.price ?? 0) + (shrimp ? SHRIMP_PRICE : 0) + deliveryFee;
+  const total = (info?.price ?? 0) + (shrimp ? SHRIMP_PRICE : 0);
 
   const canAdvance = useMemo(() => {
     switch (step) {
@@ -175,19 +173,14 @@ function Montar() {
       toast.error("Não foi possível enviar o pedido", { description: error.message });
       return;
     }
-    const row = (data as { order_number: number; total: number }[] | null)?.[0] ?? null;
-    if (!row) {
-      toast.error("Não foi possível identificar o pedido");
-      return;
-    }
-    setOrderNumber(row.order_number);
+    const row = (data as { order_number: number }[] | null)?.[0] ?? null;
+    setOrderNumber(row ? row.order_number : null);
     toast.success("Pedido enviado para a cozinha!");
-    window.location.assign(whatsappLink(RESTAURANT_WHATSAPP, buildWhatsAppMessage(row.order_number, Number(row.total))));
   }
 
-  function buildWhatsAppMessage(number: number, confirmedTotal = total) {
-    return [
-      `*Pedido #${number}* — Sr e Sra Massas`,
+  if (orderNumber !== null) {
+    const waMessage = [
+      `*Pedido #${orderNumber}* — Sr e Sra Massas`,
       `Cliente: ${customer.name}`,
       customer.orderType === "entrega"
         ? `Entrega: ${customer.address}${customer.number ? `, ${customer.number}` : ""}${customer.complement ? ` - ${customer.complement}` : ""}${customer.neighborhood ? ` - ${customer.neighborhood}` : ""}`
@@ -202,28 +195,12 @@ function Montar() {
       shrimp ? `Camarão: sim (+${brl(SHRIMP_PRICE)})` : null,
       `Refogado: ${saute}`,
       finishing.length ? `Finalização: ${finishing.join(", ")}` : null,
-      customer.orderType === "entrega" ? `Taxa de entrega: ${brl(DELIVERY_FEE)}` : null,
       customer.notes ? `Obs.: ${customer.notes}` : null,
       "",
-      `Total: ${brl(confirmedTotal)}`,
-    ].filter(Boolean).join("\n");
-  }
-
-  function startAnotherOrder() {
-    setStep(0);
-    setSize(null);
-    setPasta(null);
-    setSauce(null);
-    setIngredients([]);
-    setShrimp(false);
-    setSaute(null);
-    setFinishing([]);
-    setCustomer({ name: "", phone: "", orderType: "retirada", address: "", number: "", complement: "", neighborhood: "", reference: "", notes: "" });
-    setOrderNumber(null);
-  }
-
-  if (orderNumber !== null) {
-    const waMessage = buildWhatsAppMessage(orderNumber);
+      `Total: ${brl(total)}`,
+    ]
+      .filter(Boolean)
+      .join("\n");
 
     return (
       <div className="min-h-screen bg-background">
@@ -243,7 +220,7 @@ function Montar() {
             <p className="text-xs tracking-[0.25em] text-muted-foreground">SEU PEDIDO</p>
             <p className="font-display text-5xl font-bold text-gradient-gold">#{orderNumber}</p>
             <p className="mt-4 text-sm text-muted-foreground">
-              Guarde este número para falar com a equipe sobre seu pedido.
+              Guarde este número — use ele junto do seu telefone para acompanhar o status.
             </p>
             <p className="mt-4 font-display text-2xl font-bold text-gold">{brl(total)}</p>
           </div>
@@ -257,8 +234,10 @@ function Montar() {
                 <MessageCircle /> ENVIAR NO WHATSAPP
               </a>
             </Button>
-            <Button variant="goldOutline" size="lg" className="flex-1" onClick={startAnotherOrder}>
-              <Plus /> FAZER OUTRO PEDIDO
+            <Button asChild variant="goldOutline" size="lg" className="flex-1">
+              <Link to="/acompanhar" search={{ pedido: String(orderNumber) }}>
+                ACOMPANHAR PEDIDO
+              </Link>
             </Button>
             <Button asChild variant="goldOutline" size="lg" className="flex-1">
               <Link to="/">Voltar ao início</Link>
@@ -534,9 +513,6 @@ function Montar() {
                   value={shrimp ? "Sim" : "Não"}
                   extra={shrimp ? `+ ${brl(SHRIMP_PRICE)}` : undefined}
                 />
-                {customer.orderType === "entrega" ? (
-                  <SummaryRow label="Taxa de entrega" value={brl(DELIVERY_FEE)} />
-                ) : null}
                 <SummaryRow label="Refogado" value={saute ?? "-"} />
                 <SummaryRow label="Finalização" list={finishing} />
                 <SummaryRow

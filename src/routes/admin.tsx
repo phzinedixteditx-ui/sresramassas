@@ -32,9 +32,8 @@ function Admin() {
   const [signedIn, setSignedIn] = useState(false);
 
   const check = useCallback(async () => {
-    const { data: sessionData } = await supabase.auth.getSession();
-    const sessionUser = sessionData.session?.user;
-    if (!sessionUser) {
+    const { data } = await supabase.auth.getUser();
+    if (!data.user) {
       setSignedIn(false);
       setIsStaff(false);
       setChecking(false);
@@ -44,11 +43,11 @@ function Admin() {
     let { data: roles } = await supabase
       .from("user_roles")
       .select("role")
-      .eq("user_id", sessionUser.id);
+      .eq("user_id", data.user.id);
     if (!roles || roles.length === 0) {
       const { data: claimed } = await supabase.rpc("claim_first_admin");
       if (claimed) {
-        const res = await supabase.from("user_roles").select("role").eq("user_id", sessionUser.id);
+        const res = await supabase.from("user_roles").select("role").eq("user_id", data.user.id);
         roles = res.data;
       }
     }
@@ -58,17 +57,8 @@ function Admin() {
 
   useEffect(() => {
     void check();
-    const { data: sub } = supabase.auth.onAuthStateChange((event, session) => {
-      if (event === "SIGNED_OUT") {
-        setSignedIn(false);
-        setIsStaff(false);
-        setChecking(false);
-        return;
-      }
-      if ((event === "SIGNED_IN" || event === "USER_UPDATED") && session) {
-        setSignedIn(true);
-        window.setTimeout(() => void check(), 0);
-      }
+    const { data: sub } = supabase.auth.onAuthStateChange(() => {
+      void check();
     });
     return () => sub.subscription.unsubscribe();
   }, [check]);

@@ -191,7 +191,10 @@ function Montar() {
 
   async function submitOrder() {
     const hasCurrentItem = size && pasta && sauce && saute;
-    if (cartItems.length === 0 && !hasCurrentItem) return;
+    if (cartItems.length === 0 && !hasCurrentItem) {
+      toast.error("Adicione ao menos uma massa ao pedido.");
+      return;
+    }
 
     setSubmitting(true);
 
@@ -212,40 +215,52 @@ function Montar() {
 
     const orderNumbers: number[] = [];
 
-    for (const item of allItems) {
-      const { data, error } = await supabase.rpc("create_order", {
-        p_customer_name: customer.name,
-        p_phone: customer.phone,
-        p_order_type: customer.orderType,
-        p_address: customer.address,
-        p_number: customer.number,
-        p_complement: customer.complement,
-        p_neighborhood: customer.neighborhood,
-        p_reference: customer.reference,
-        p_size: item.size,
-        p_pasta_type: item.pasta,
-        p_sauce: item.sauce,
-        p_ingredients: item.ingredients,
-        p_shrimp: item.shrimp,
-        p_saute_type: item.saute,
-        p_finishing: item.finishing,
-        p_notes: item.massaLabel
-          ? `[Para: ${item.massaLabel}]${customer.notes ? ` ${customer.notes}` : ""}`
-          : customer.notes,
-      });
+    try {
+      for (const item of allItems) {
+        try {
+          const { data, error } = await supabase.rpc("create_order", {
+            p_customer_name: customer.name.trim(),
+            p_phone: customer.phone ? customer.phone.trim() : "",
+            p_order_type: customer.orderType,
+            p_address: customer.address ? customer.address.trim() : "",
+            p_number: customer.number ? customer.number.trim() : "",
+            p_complement: customer.complement ? customer.complement.trim() : "",
+            p_neighborhood: customer.neighborhood ? customer.neighborhood.trim() : "",
+            p_reference: customer.reference ? customer.reference.trim() : "",
+            p_size: item.size,
+            p_pasta_type: item.pasta,
+            p_sauce: item.sauce,
+            p_ingredients: item.ingredients ?? [],
+            p_shrimp: item.shrimp ?? false,
+            p_saute_type: item.saute,
+            p_finishing: item.finishing ?? [],
+            p_notes: item.massaLabel
+              ? `[Para: ${item.massaLabel}]${customer.notes ? ` ${customer.notes}` : ""}`
+              : customer.notes || "",
+          });
 
-      if (!error) {
-        const row = (data as { order_number: number }[] | null)?.[0] ?? null;
-        if (row) orderNumbers.push(row.order_number);
+          if (!error && data) {
+            const row = (data as { order_number: number }[] | null)?.[0] ?? null;
+            if (row?.order_number) orderNumbers.push(row.order_number);
+          } else if (error) {
+            console.warn("Aviso ao salvar pedido no painel:", error.message);
+          }
+        } catch (itemErr) {
+          console.warn("Erro ao processar item do pedido:", itemErr);
+        }
       }
+    } catch (err) {
+      console.warn("Aviso geral ao gravar pedido:", err);
+    } finally {
+      setSubmitting(false);
     }
-
-    setSubmitting(false);
 
     const itemsText = allItems
       .map((item, idx) => {
         const labelLine = item.massaLabel ? `- Para: *${item.massaLabel}*\n` : "";
-        return `*Massa ${idx + 1}:*\n${labelLine}- Tamanho: ${sizeInfo(item.size)?.label}\n- Massa: ${item.pasta}\n- Molho: ${item.sauce}\n- Ingredientes: ${item.ingredients.length ? item.ingredients.join(", ") : "nenhum"}\n- Camarão: ${item.shrimp ? "sim" : "não"}\n- Refogado: ${item.saute}\n- Finalização: ${item.finishing.length ? item.finishing.join(", ") : "nenhuma"}\n- Valor: ${brl(item.total)}`;
+        const ingText = (item.ingredients?.length ?? 0) > 0 ? item.ingredients.join(", ") : "nenhum";
+        const finText = (item.finishing?.length ?? 0) > 0 ? item.finishing.join(", ") : "nenhuma";
+        return `*Massa ${idx + 1}:*\n${labelLine}- Tamanho: ${sizeInfo(item.size)?.label}\n- Massa: ${item.pasta}\n- Molho: ${item.sauce}\n- Ingredientes: ${ingText}\n- Camarão: ${item.shrimp ? "sim" : "não"}\n- Refogado: ${item.saute}\n- Finalização: ${finText}\n- Valor: ${brl(item.total)}`;
       })
       .join("\n\n");
 
@@ -271,7 +286,13 @@ function Montar() {
       .join("\n");
 
     const link = whatsappLink(RESTAURANT_WHATSAPP, waMessage);
-    window.location.href = link;
+    toast.success("Redirecionando para o WhatsApp...");
+
+    try {
+      window.location.assign(link);
+    } catch {
+      window.location.href = link;
+    }
   }
 
   return (

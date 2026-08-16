@@ -14,7 +14,7 @@ export const RESTAURANT_WHATSAPP_LABEL = "+55 31 99910-1195";
 export function whatsappLink(phone: string, message?: string) {
   const digits = phone.replace(/\D/g, "");
   const withDdi = digits.startsWith("55") ? digits : `55${digits}`;
-  return `https://wa.me/${withDdi}${message ? `?text=${encodeURIComponent(message)}` : ""}`;
+  return `https://api.whatsapp.com/send?phone=${withDdi}${message ? `&text=${encodeURIComponent(message)}` : ""}`;
 }
 
 export const PASTAS = [

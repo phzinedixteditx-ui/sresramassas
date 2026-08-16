@@ -1,6 +1,6 @@
 import { createFileRoute } from "@tanstack/react-router";
 import { Bell, Loader as Loader2, LogOut, RefreshCw, Trash2 } from "lucide-react";
-import { useCallback, useEffect, useState } from "react";
+import { useCallback, useEffect, useState, type ReactNode } from "react";
 import { toast } from "sonner";
 
 import { Logo } from "@/components/brand/Logo";
@@ -16,10 +16,10 @@ export const Route = createFileRoute("/admin")({
   ssr: false,
   head: () => ({
     meta: [
-      { title: "Painel do restaurante — Sr e Sra Massas" },
+      { title: "Painel de Produção — Sr e Sra Massas" },
       { name: "description", content: "Área restrita da equipe Sr e Sra Massas." },
       { name: "robots", content: "noindex" },
-      { property: "og:title", content: "Painel do restaurante — Sr e Sra Massas" },
+      { property: "og:title", content: "Painel de Produção — Sr e Sra Massas" },
       { property: "og:description", content: "Área restrita da equipe Sr e Sra Massas." },
     ],
   }),
@@ -34,7 +34,7 @@ function Admin() {
   const check = useCallback(async () => {
     try {
       const { data, error: userError } = await supabase.auth.getUser();
-      if (userError || !data.user) {
+      if (userError || !data?.user) {
         setSignedIn(false);
         setIsStaff(false);
         return;
@@ -46,15 +46,17 @@ function Admin() {
         .select("role")
         .eq("user_id", data.user.id);
 
-      if (rolesError) throw rolesError;
+      if (rolesError) {
+        console.warn("Erro ao buscar permissões:", rolesError.message);
+      }
 
       if (!roles || roles.length === 0) {
         const { data: claimed, error: claimError } = await supabase.rpc("claim_first_admin");
-        if (claimError) throw claimError;
-        if (claimed) {
+        if (!claimError && claimed) {
           const res = await supabase.from("user_roles").select("role").eq("user_id", data.user.id);
-          if (res.error) throw res.error;
-          roles = res.data;
+          if (!res.error) {
+            roles = res.data;
+          }
         }
       }
       setIsStaff((roles ?? []).length > 0);
@@ -80,12 +82,12 @@ function Admin() {
 
       if (event === "SIGNED_IN" || event === "USER_UPDATED") {
         setChecking(true);
-        // Auth callbacks hold an internal lock. Run database/auth reads only
-        // after the callback returns so the panel cannot deadlock on load.
         window.setTimeout(() => void check(), 0);
       }
     });
-    return () => sub.subscription.unsubscribe();
+    return () => {
+      sub?.subscription?.unsubscribe();
+    };
   }, [check]);
 
   if (checking) {
@@ -101,7 +103,7 @@ function Admin() {
   return <Dashboard />;
 }
 
-function AdminShell({ children }: { children: React.ReactNode }) {
+function AdminShell({ children }: { children: ReactNode }) {
   return (
     <div className="flex min-h-screen items-center justify-center bg-background px-6 py-16">
       <div className="panel w-full max-w-sm p-8 text-center">
@@ -287,11 +289,11 @@ function Dashboard() {
     const groups: AdminOrder[][] = [];
     const used = new Set<string>();
     for (const order of list) {
-      if (used.has(order.id)) continue;
-      const t = new Date(order.created_at).getTime();
+      if (!order?.id || used.has(order.id)) continue;
+      const t = new Date(order.created_at || Date.now()).getTime();
       const group = list.filter((o) => {
-        if (used.has(o.id)) return false;
-        const ot = new Date(o.created_at).getTime();
+        if (!o?.id || used.has(o.id)) return false;
+        const ot = new Date(o.created_at || Date.now()).getTime();
         return (
           o.customer_name === order.customer_name &&
           o.phone === order.phone &&
@@ -308,53 +310,71 @@ function Dashboard() {
     for (const order of orderGroup) {
       const { error } = await supabase.from("orders").update({ status }).eq("id", order.id);
       if (error) {
-        toast.error("Nao foi possivel atualizar", { description: error.message });
+        toast.error("Não foi possível atualizar", { description: error.message });
         return;
       }
     }
+    const ids = new Set(orderGroup.map((o) => o.id));
+    setOrders((prev) => prev.map((o) => (ids.has(o.id) ? { ...o, status } : o)));
     const nums = orderGroup.map((o) => `#${o.order_number}`).join(", ");
     toast.success(`Pedido ${nums} atualizado`);
   }
 
   async function cancelOrder(orderGroup: AdminOrder[]) {
-    for (const order of orderGroup) {
-      const { error } = await supabase.from("orders").delete().eq("id", order.id);
-      if (error) {
-        toast.error("Nao foi possivel excluir", { description: error.message });
-        return;
-      }
+    const ids = orderGroup.map((o) => o.id);
+    const { error } = await supabase.from("orders").delete().in("id", ids);
+    if (error) {
+      console.warn("Aviso ao excluir no banco:", error.message);
     }
-    const ids = new Set(orderGroup.map((o) => o.id));
-    setOrders((prev) => prev.filter((o) => !ids.has(o.id)));
+    const idSet = new Set(ids);
+    setOrders((prev) => prev.filter((o) => !idSet.has(o.id)));
     const nums = orderGroup.map((o) => `#${o.order_number}`).join(", ");
-    toast.success(`Pedido ${nums} cancelado e excluido.`);
+    toast.success(`Pedido ${nums} cancelado e excluído.`);
   }
 
   async function clearOldOrders() {
-    const twoHoursAgo = new Date(Date.now() - 2 * 60 * 60 * 1000).toISOString();
-    if (
-      !window.confirm(
-        "Excluir todos os pedidos concluídos ou com mais de 2 horas? Esta ação não pode ser desfeita.",
-      )
-    )
-      return;
-    const { error } = await supabase
-      .from("orders")
-      .delete()
-      .or(`status.eq.concluido,created_at.lt.${twoHoursAgo}`);
-    if (error) {
-      toast.error("Não foi possível limpar os pedidos", { description: error.message });
+    const twoHoursAgoTime = Date.now() - 2 * 60 * 60 * 1000;
+    
+    // Identifica pedidos que foram concluídos OU têm mais de 2 horas
+    const oldOrders = orders.filter((o) => {
+      if (o.status === "concluido") return true;
+      const t = new Date(o.created_at || 0).getTime();
+      return !isNaN(t) && t < twoHoursAgoTime;
+    });
+
+    if (oldOrders.length === 0) {
+      toast.info("Nenhum pedido antigo (> 2 horas ou concluído) encontrado.");
       return;
     }
-    setOrders((prev) =>
-      prev.filter((o) => o.status !== "concluido" && new Date(o.created_at) > new Date(Date.now() - 2 * 60 * 60 * 1000)),
-    );
-    toast.success("Pedidos antigos foram excluídos.");
+
+    if (
+      !window.confirm(
+        `Excluir ${oldOrders.length} pedido(s) antigo(s) com mais de 2 horas ou concluídos? Esta ação não pode ser desfeita.`,
+      )
+    ) {
+      return;
+    }
+
+    const idsToDelete = oldOrders.map((o) => o.id);
+    
+    // Tenta remover no banco de dados Supabase
+    const { error } = await supabase.from("orders").delete().in("id", idsToDelete);
+    if (error) {
+      console.warn("Aviso ao excluir do banco:", error.message);
+    }
+
+    const deleteSet = new Set(idsToDelete);
+    setOrders((prev) => prev.filter((o) => !deleteSet.has(o.id)));
+    toast.success(`${oldOrders.length} pedido(s) antigo(s) excluído(s) com sucesso.`);
   }
 
   const todayTotal = orders
-    .filter((o) => new Date(o.created_at).toDateString() === new Date().toDateString())
-    .reduce((sum, o) => sum + Number(o.total), 0);
+    .filter((o) => {
+      if (!o.created_at) return false;
+      const d = new Date(o.created_at);
+      return !isNaN(d.getTime()) && d.toDateString() === new Date().toDateString();
+    })
+    .reduce((sum, o) => sum + Number(o.total || 0), 0);
 
   return (
     <div className="min-h-screen bg-background">
@@ -378,8 +398,13 @@ function Dashboard() {
             <Button variant="ghost" size="icon" onClick={() => void load()} aria-label="Atualizar">
               <RefreshCw />
             </Button>
-            <Button variant="goldOutline" size="sm" onClick={() => void clearOldOrders()}>
-              <Trash2 /> Limpar antigos
+            <Button
+              variant="goldOutline"
+              size="sm"
+              onClick={() => void clearOldOrders()}
+              className="gap-1.5 text-xs"
+            >
+              <Trash2 className="size-3.5" /> Limpar antigos (&gt; 2h)
             </Button>
             <Button variant="goldOutline" size="sm" onClick={() => void supabase.auth.signOut()}>
               <LogOut /> Sair

@@ -3,14 +3,30 @@ import { Bike, Check, ChefHat, Clock, MessageCircle, PackageCheck, X } from "luc
 import { Button } from "@/components/ui/button";
 import { brl, whatsappLink, type OrderStatus } from "@/lib/menu";
 
-function formatDateTime(iso: string) {
+function formatDateTime(iso?: string | null) {
+  if (!iso) return "--/-- --:--";
   const d = new Date(iso);
+  if (isNaN(d.getTime())) return "--/-- --:--";
   return d.toLocaleString("pt-BR", {
     day: "2-digit",
     month: "2-digit",
     hour: "2-digit",
     minute: "2-digit",
   });
+}
+
+function timeAgo(iso?: string | null) {
+  if (!iso) return "";
+  const d = new Date(iso);
+  if (isNaN(d.getTime())) return "";
+  const diffMs = Date.now() - d.getTime();
+  if (diffMs < 0) return "Agora";
+  const mins = Math.floor(diffMs / (60 * 1000));
+  if (mins < 1) return "Agora";
+  if (mins < 60) return `Há ${mins} min`;
+  const hours = Math.floor(mins / 60);
+  const remainingMins = mins % 60;
+  return `Há ${hours}h${remainingMins > 0 ? ` ${remainingMins}m` : ""}`;
 }
 
 export type AdminOrder = {
@@ -40,7 +56,7 @@ export type AdminOrder = {
 };
 
 const NEXT: Record<OrderStatus, { status: OrderStatus; label: string; icon: typeof Check } | null> = {
-  novo: { status: "em_preparo", label: "COMECAR PREPARO", icon: ChefHat },
+  novo: { status: "em_preparo", label: "COMEÇAR PREPARO", icon: ChefHat },
   em_preparo: { status: "pronto", label: "MARCAR COMO PRONTO", icon: PackageCheck },
   pronto: { status: "saiu_entrega", label: "SAIU PARA ENTREGA", icon: Bike },
   saiu_entrega: { status: "concluido", label: "CONCLUIR PEDIDO", icon: Check },
@@ -66,23 +82,32 @@ export function OrderCard({
       ? { status: "concluido" as OrderStatus, label: "CONCLUIR PEDIDO", icon: Check }
       : next;
 
-  const groupTotal = orders.reduce((acc, o) => acc + Number(o.total), 0);
+  const groupTotal = orders.reduce((acc, o) => acc + Number(o.total || 0), 0);
   const orderNums = orders.map((o) => `#${o.order_number}`).join(", ");
 
   return (
     <article className="animate-rise panel p-4">
       {/* Header do cliente */}
       <header className="flex items-start justify-between gap-2">
-        <div>
+        <div className="space-y-1">
           <p className="text-[10px] tracking-[0.15em] text-muted-foreground uppercase">{orderNums}</p>
-          <p className="font-display text-base font-bold text-foreground mt-0.5">{first.customer_name}</p>
-          <p className="mt-0.5 inline-flex items-center gap-1 text-[10px] text-muted-foreground">
-            <Clock className="size-3" /> {formatDateTime(first.created_at)}
-          </p>
+          <p className="font-display text-base font-bold text-foreground">{first.customer_name}</p>
+          
+          <div className="flex flex-wrap items-center gap-1.5 text-[11px] text-muted-foreground">
+            <span className="inline-flex items-center gap-1 font-medium text-foreground">
+              <Clock className="size-3 text-gold" /> {formatDateTime(first.created_at)}
+            </span>
+            {timeAgo(first.created_at) ? (
+              <span className="rounded-full border border-gold/30 bg-gold/10 px-2 py-0.5 text-[10px] font-semibold text-gold">
+                {timeAgo(first.created_at)}
+              </span>
+            ) : null}
+          </div>
+
           {first.phone ? (
             <a
-              className="mt-0.5 inline-flex items-center gap-1 text-xs text-gold underline-offset-4 hover:underline"
-              href={whatsappLink(first.phone, `Ola ${first.customer_name}, aqui e do Sr e Sra Massas sobre o seu pedido.`)}
+              className="mt-1 inline-flex items-center gap-1 text-xs text-gold underline-offset-4 hover:underline"
+              href={whatsappLink(first.phone, `Olá ${first.customer_name}, aqui é do Sr e Sra Massas sobre o seu pedido ${orderNums}.`)}
               target="_blank"
               rel="noreferrer"
             >
@@ -90,6 +115,7 @@ export function OrderCard({
             </a>
           ) : null}
         </div>
+
         <div className="flex flex-col items-end gap-2">
           <button
             type="button"
@@ -97,14 +123,14 @@ export function OrderCard({
             title="Cancelar e remover pedido"
             onClick={() => {
               const nums = orders.map((o) => `#${o.order_number}`).join(", ");
-              if (window.confirm(`Cancelar o(s) pedido(s) ${nums} de ${first.customer_name}? Eles serao excluidos do painel.`)) {
+              if (window.confirm(`Cancelar o(s) pedido(s) ${nums} de ${first.customer_name}? Eles serão excluídos do painel.`)) {
                 onCancel(orders);
               }
             }}
           >
             <X className="size-4" />
           </button>
-          <span className="rounded-full border border-gold/40 px-2 py-0.5 text-[10px] tracking-wide text-gold uppercase">
+          <span className="rounded-full border border-gold/40 px-2 py-0.5 text-[10px] tracking-wide text-gold uppercase font-medium">
             {first.order_type === "local" ? "no local" : first.order_type}
           </span>
         </div>
@@ -113,7 +139,7 @@ export function OrderCard({
       {/* Massas do pedido */}
       <div className="mt-3 space-y-3 border-t border-border/70 pt-3">
         {orders.map((order, idx) => (
-          <div key={order.id} className="space-y-1.5 text-xs">
+          <div key={order.id || idx} className="space-y-1.5 text-xs">
             {orders.length > 1 && (
               <p className="font-display text-[10px] font-bold tracking-widest text-gold uppercase">
                 — Massa {idx + 1}
@@ -124,7 +150,7 @@ export function OrderCard({
             </p>
             <Line label="Molho" value={order.sauce} />
             <Line label="Refogado" value={order.saute_type} />
-            {order.ingredients.length ? (
+            {(order.ingredients?.length ?? 0) > 0 ? (
               <div>
                 <p className="text-[10px] tracking-[0.15em] text-muted-foreground uppercase">Ingredientes</p>
                 <ul className="mt-1 grid grid-cols-2 gap-x-2 text-foreground">
@@ -135,11 +161,11 @@ export function OrderCard({
               </div>
             ) : null}
             {order.shrimp ? (
-              <p className="font-semibold text-gold">✓ CAMARAO + {brl(Number(order.shrimp_price))}</p>
+              <p className="font-semibold text-gold">✓ CAMARÃO + {brl(Number(order.shrimp_price || 0))}</p>
             ) : null}
-            {order.finishing.length ? (
+            {(order.finishing?.length ?? 0) > 0 ? (
               <div>
-                <p className="text-[10px] tracking-[0.15em] text-muted-foreground uppercase">Finalizacao</p>
+                <p className="text-[10px] tracking-[0.15em] text-muted-foreground uppercase">Finalização</p>
                 <ul className="mt-1 grid grid-cols-2 gap-x-2 text-foreground">
                   {order.finishing.map((f) => (
                     <li key={f}>✓ {f}</li>
@@ -151,10 +177,10 @@ export function OrderCard({
         ))}
       </div>
 
-      {/* Endereco (uma vez so, pois e o mesmo para todas as massas) */}
+      {/* Endereço */}
       {first.order_type === "entrega" ? (
         <div className="mt-3 rounded-lg border border-gold/40 bg-gold/8 px-2.5 py-2 text-xs">
-          <p className="text-[10px] tracking-[0.15em] text-gold uppercase">Endereco de entrega</p>
+          <p className="text-[10px] tracking-[0.15em] text-gold uppercase font-bold">Endereço de entrega</p>
           <p className="mt-1 font-medium text-foreground">
             {first.address}
             {first.number ? `, ${first.number}` : ""}
@@ -169,7 +195,7 @@ export function OrderCard({
               target="_blank"
               rel="noreferrer"
             >
-              Whatsapp: {first.phone}
+              WhatsApp: {first.phone}
             </a>
           ) : null}
         </div>
@@ -177,7 +203,7 @@ export function OrderCard({
 
       {first.notes ? (
         <p className="mt-2 text-xs rounded-lg border border-gold/30 bg-gold/8 px-2 py-1.5 text-foreground">
-          <span className="text-gold">OBS:</span> {first.notes}
+          <span className="text-gold font-bold">OBS:</span> {first.notes}
         </p>
       ) : null}
 
@@ -203,11 +229,12 @@ export function OrderCard({
   );
 }
 
-function Line({ label, value }: { label: string; value: string }) {
+function Line({ label, value }: { label: string; value?: string | null }) {
+  if (!value) return null;
   return (
     <p className="flex justify-between gap-2">
       <span className="text-[10px] tracking-[0.15em] text-muted-foreground uppercase">{label}</span>
-      <span className="text-foreground">{value}</span>
+      <span className="text-foreground font-medium">{value}</span>
     </p>
   );
 }

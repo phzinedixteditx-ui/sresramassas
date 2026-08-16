@@ -1,5 +1,5 @@
 import { createFileRoute } from "@tanstack/react-router";
-import { Check, Loader2, Search } from "lucide-react";
+import { Check, Clock, Loader2, Search } from "lucide-react";
 import { useCallback, useEffect, useState } from "react";
 import { toast } from "sonner";
 
@@ -149,6 +149,11 @@ function Acompanhar() {
                 <p className="font-display text-4xl font-bold text-gradient-gold">
                   #{order.order_number}
                 </p>
+                {order.created_at ? (
+                  <p className="mt-1 inline-flex items-center gap-1 text-xs text-muted-foreground">
+                    <Clock className="size-3 text-gold" /> {formatDateTime(order.created_at)}
+                  </p>
+                ) : null}
               </div>
               <div className="text-right">
                 <p className="text-xs text-muted-foreground">
@@ -224,4 +229,16 @@ function statusLabel(id: OrderStatus) {
     default:
       return "Concluído";
   }
+}
+
+function formatDateTime(iso?: string | null) {
+  if (!iso) return "";
+  const d = new Date(iso);
+  if (isNaN(d.getTime())) return "";
+  return d.toLocaleString("pt-BR", {
+    day: "2-digit",
+    month: "2-digit",
+    hour: "2-digit",
+    minute: "2-digit",
+  });
 }

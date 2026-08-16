@@ -164,39 +164,45 @@ function AdminLogin() {
     }
     const email = `${user}@srsramassas.app`;
     setLoading(true);
-    if (mode === "login") {
-      const { error } = await supabase.auth.signInWithPassword({ email, password });
-      setLoading(false);
-      if (error) {
-        toast.error("Não foi possível entrar", {
-          description: "Usuário ou senha incorretos.",
+    try {
+      if (mode === "login") {
+        const { error } = await supabase.auth.signInWithPassword({ email, password });
+        if (error) {
+          toast.error("Não foi possível entrar", {
+            description: "Usuário ou senha incorretos.",
+          });
+        }
+      } else {
+        const { data, error } = await supabase.auth.signUp({
+          email,
+          password,
+          options: { emailRedirectTo: `${window.location.origin}/admin` },
         });
-      }
-    } else {
-      const { data, error } = await supabase.auth.signUp({
-        email,
-        password,
-        options: { emailRedirectTo: `${window.location.origin}/admin` },
-      });
-      setLoading(false);
-      if (error) {
-        toast.error("Não foi possível criar a conta", {
-          description: error.message.toLowerCase().includes("already")
-            ? "Este usuário já existe. Faça login."
-            : error.message,
-        });
-        return;
-      }
-      if (!data.session) {
-        const { error: signInError } = await supabase.auth.signInWithPassword({ email, password });
-        if (signInError) {
-          toast.error("Conta criada, mas não foi possível entrar", {
-            description: signInError.message,
+        if (error) {
+          toast.error("Não foi possível criar a conta", {
+            description: error.message.toLowerCase().includes("already")
+              ? "Este usuário já existe. Faça login."
+              : error.message,
           });
           return;
         }
+        if (!data.session) {
+          const { error: signInError } = await supabase.auth.signInWithPassword({ email, password });
+          if (signInError) {
+            toast.error("Conta criada, mas não foi possível entrar", {
+              description: signInError.message,
+            });
+            return;
+          }
+        }
+        toast.success("Conta criada! Bem-vindo ao painel.");
       }
-      toast.success("Conta criada! Bem-vindo ao painel.");
+    } catch (err) {
+      toast.error("Erro inesperado ao entrar", {
+        description: err instanceof Error ? err.message : "Verifique sua conexão e tente novamente.",
+      });
+    } finally {
+      setLoading(false);
     }
   }
 

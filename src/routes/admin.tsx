@@ -32,33 +32,58 @@ function Admin() {
   const [signedIn, setSignedIn] = useState(false);
 
   const check = useCallback(async () => {
-    const { data } = await supabase.auth.getUser();
-    if (!data.user) {
-      setSignedIn(false);
-      setIsStaff(false);
-      setChecking(false);
-      return;
-    }
-    setSignedIn(true);
-    let { data: roles } = await supabase
-      .from("user_roles")
-      .select("role")
-      .eq("user_id", data.user.id);
-    if (!roles || roles.length === 0) {
-      const { data: claimed } = await supabase.rpc("claim_first_admin");
-      if (claimed) {
-        const res = await supabase.from("user_roles").select("role").eq("user_id", data.user.id);
-        roles = res.data;
+    try {
+      const { data, error: userError } = await supabase.auth.getUser();
+      if (userError || !data.user) {
+        setSignedIn(false);
+        setIsStaff(false);
+        return;
       }
+
+      setSignedIn(true);
+      let { data: roles, error: rolesError } = await supabase
+        .from("user_roles")
+        .select("role")
+        .eq("user_id", data.user.id);
+
+      if (rolesError) throw rolesError;
+
+      if (!roles || roles.length === 0) {
+        const { data: claimed, error: claimError } = await supabase.rpc("claim_first_admin");
+        if (claimError) throw claimError;
+        if (claimed) {
+          const res = await supabase.from("user_roles").select("role").eq("user_id", data.user.id);
+          if (res.error) throw res.error;
+          roles = res.data;
+        }
+      }
+      setIsStaff((roles ?? []).length > 0);
+    } catch (error) {
+      setIsStaff(false);
+      toast.error("Não foi possível carregar o painel", {
+        description: error instanceof Error ? error.message : "Verifique sua conexão e tente novamente.",
+      });
+    } finally {
+      setChecking(false);
     }
-    setIsStaff((roles ?? []).length > 0);
-    setChecking(false);
   }, []);
 
   useEffect(() => {
     void check();
-    const { data: sub } = supabase.auth.onAuthStateChange(() => {
-      void check();
+    const { data: sub } = supabase.auth.onAuthStateChange((event) => {
+      if (event === "SIGNED_OUT") {
+        setSignedIn(false);
+        setIsStaff(false);
+        setChecking(false);
+        return;
+      }
+
+      if (event === "SIGNED_IN" || event === "USER_UPDATED") {
+        setChecking(true);
+        // Auth callbacks hold an internal lock. Run database/auth reads only
+        // after the callback returns so the panel cannot deadlock on load.
+        window.setTimeout(() => void check(), 0);
+      }
     });
     return () => sub.subscription.unsubscribe();
   }, [check]);

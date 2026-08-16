@@ -55,12 +55,11 @@ export type AdminOrder = {
   created_at: string;
 };
 
-const NEXT: Record<OrderStatus, { status: OrderStatus; label: string; icon: typeof Check } | null> = {
+const NEXT: Record<string, { status: OrderStatus; label: string; icon: typeof Check }> = {
   novo: { status: "em_preparo", label: "COMEÇAR PREPARO", icon: ChefHat },
   em_preparo: { status: "pronto", label: "MARCAR COMO PRONTO", icon: PackageCheck },
   pronto: { status: "saiu_entrega", label: "SAIU PARA ENTREGA", icon: Bike },
   saiu_entrega: { status: "concluido", label: "CONCLUIR PEDIDO", icon: Check },
-  concluido: null,
 };
 
 export function OrderCard({
@@ -75,15 +74,16 @@ export function OrderCard({
   const first = orders[0];
   if (!first) return null;
 
-  const status = first.status;
-  const next = NEXT[status];
+  const rawStatus = (first.status || "novo").toLowerCase();
+  const next = NEXT[rawStatus] || null;
   const nextForPickup =
-    first.order_type !== "entrega" && status === "pronto"
+    first.order_type !== "entrega" && rawStatus === "pronto"
       ? { status: "concluido" as OrderStatus, label: "CONCLUIR PEDIDO", icon: Check }
       : next;
 
-  const groupTotal = orders.reduce((acc, o) => acc + Number(o.total || 0), 0);
-  const orderNums = orders.map((o) => `#${o.order_number}`).join(", ");
+  const groupTotal = orders.reduce((acc, o) => acc + Number(o?.total || 0), 0);
+  const orderNums = orders.map((o) => `#${o?.order_number ?? "?"}`).join(", ");
+  const customerName = first.customer_name || "Cliente";
 
   return (
     <article className="animate-rise panel p-4">
@@ -91,7 +91,7 @@ export function OrderCard({
       <header className="flex items-start justify-between gap-2">
         <div className="space-y-1">
           <p className="text-[10px] tracking-[0.15em] text-muted-foreground uppercase">{orderNums}</p>
-          <p className="font-display text-base font-bold text-foreground">{first.customer_name}</p>
+          <p className="font-display text-base font-bold text-foreground">{customerName}</p>
           
           <div className="flex flex-wrap items-center gap-1.5 text-[11px] text-muted-foreground">
             <span className="inline-flex items-center gap-1 font-medium text-foreground">
@@ -107,7 +107,7 @@ export function OrderCard({
           {first.phone ? (
             <a
               className="mt-1 inline-flex items-center gap-1 text-xs text-gold underline-offset-4 hover:underline"
-              href={whatsappLink(first.phone, `Olá ${first.customer_name}, aqui é do Sr e Sra Massas sobre o seu pedido ${orderNums}.`)}
+              href={whatsappLink(first.phone, `Olá ${customerName}, aqui é do Sr e Sra Massas sobre o seu pedido ${orderNums}.`)}
               target="_blank"
               rel="noreferrer"
             >
@@ -122,8 +122,8 @@ export function OrderCard({
             className="rounded-full bg-red-500/10 p-1.5 text-red-500 transition-colors hover:bg-red-500/20"
             title="Cancelar e remover pedido"
             onClick={() => {
-              const nums = orders.map((o) => `#${o.order_number}`).join(", ");
-              if (window.confirm(`Cancelar o(s) pedido(s) ${nums} de ${first.customer_name}? Eles serão excluídos do painel.`)) {
+              const nums = orders.map((o) => `#${o?.order_number ?? "?"}`).join(", ");
+              if (window.confirm(`Cancelar o(s) pedido(s) ${nums} de ${customerName}? Eles serão excluídos do painel.`)) {
                 onCancel(orders);
               }
             }}
@@ -131,50 +131,56 @@ export function OrderCard({
             <X className="size-4" />
           </button>
           <span className="rounded-full border border-gold/40 px-2 py-0.5 text-[10px] tracking-wide text-gold uppercase font-medium">
-            {first.order_type === "local" ? "no local" : first.order_type}
+            {first.order_type === "local" ? "no local" : (first.order_type || "retirada")}
           </span>
         </div>
       </header>
 
       {/* Massas do pedido */}
       <div className="mt-3 space-y-3 border-t border-border/70 pt-3">
-        {orders.map((order, idx) => (
-          <div key={order.id || idx} className="space-y-1.5 text-xs">
-            {orders.length > 1 && (
-              <p className="font-display text-[10px] font-bold tracking-widest text-gold uppercase">
-                — Massa {idx + 1}
+        {orders.map((order, idx) => {
+          if (!order) return null;
+          const ingredientsList = Array.isArray(order.ingredients) ? order.ingredients : [];
+          const finishingList = Array.isArray(order.finishing) ? order.finishing : [];
+          
+          return (
+            <div key={order.id || idx} className="space-y-1.5 text-xs">
+              {orders.length > 1 && (
+                <p className="font-display text-[10px] font-bold tracking-widest text-gold uppercase">
+                  — Massa {idx + 1}
+                </p>
+              )}
+              <p className="font-display text-sm font-bold text-foreground uppercase">
+                {order.size || "Massa"} · {order.pasta_type || "Tradicional"}
               </p>
-            )}
-            <p className="font-display text-sm font-bold text-foreground uppercase">
-              {order.size} · {order.pasta_type}
-            </p>
-            <Line label="Molho" value={order.sauce} />
-            <Line label="Refogado" value={order.saute_type} />
-            {(order.ingredients?.length ?? 0) > 0 ? (
-              <div>
-                <p className="text-[10px] tracking-[0.15em] text-muted-foreground uppercase">Ingredientes</p>
-                <ul className="mt-1 grid grid-cols-2 gap-x-2 text-foreground">
-                  {order.ingredients.map((i) => (
-                    <li key={i}>✓ {i}</li>
-                  ))}
-                </ul>
-              </div>
-            ) : null}
-            {order.shrimp ? (
-              <p className="font-semibold text-gold">✓ CAMARÃO + {brl(Number(order.shrimp_price || 0))}</p>
-            ) : null}
-            {(order.finishing?.length ?? 0) > 0 ? (
-              <div>
-                <p className="text-[10px] tracking-[0.15em] text-muted-foreground uppercase">Finalização</p>
-                <ul className="mt-1 grid grid-cols-2 gap-x-2 text-foreground">
-                  {order.finishing.map((f) => (
-                    <li key={f}>✓ {f}</li>
-                  ))}
-                </ul>
-              </div>
-            ) : null}
-          </div>
-        ))}
+              <Line label="Molho" value={order.sauce} />
+              <Line label="Refogado" value={order.saute_type} />
+              {ingredientsList.length > 0 ? (
+                <div>
+                  <p className="text-[10px] tracking-[0.15em] text-muted-foreground uppercase">Ingredientes</p>
+                  <ul className="mt-1 grid grid-cols-2 gap-x-2 text-foreground">
+                    {ingredientsList.map((i) => (
+                      <li key={i}>✓ {i}</li>
+                    ))}
+                  </ul>
+                </div>
+              ) : null}
+              {order.shrimp ? (
+                <p className="font-semibold text-gold">✓ CAMARÃO + {brl(Number(order.shrimp_price || 0))}</p>
+              ) : null}
+              {finishingList.length > 0 ? (
+                <div>
+                  <p className="text-[10px] tracking-[0.15em] text-muted-foreground uppercase">Finalização</p>
+                  <ul className="mt-1 grid grid-cols-2 gap-x-2 text-foreground">
+                    {finishingList.map((f) => (
+                      <li key={f}>✓ {f}</li>
+                    ))}
+                  </ul>
+                </div>
+              ) : null}
+            </div>
+          );
+        })}
       </div>
 
       {/* Endereço */}
@@ -182,7 +188,7 @@ export function OrderCard({
         <div className="mt-3 rounded-lg border border-gold/40 bg-gold/8 px-2.5 py-2 text-xs">
           <p className="text-[10px] tracking-[0.15em] text-gold uppercase font-bold">Endereço de entrega</p>
           <p className="mt-1 font-medium text-foreground">
-            {first.address}
+            {first.address || "Endereço não informado"}
             {first.number ? `, ${first.number}` : ""}
             {first.complement ? ` · ${first.complement}` : ""}
           </p>
@@ -215,14 +221,18 @@ export function OrderCard({
         <span className="font-display text-xl font-bold text-gold">{brl(groupTotal)}</span>
       </div>
 
-      {nextForPickup ? (
+      {nextForPickup && nextForPickup.icon ? (
         <Button
           variant="gold"
           size="sm"
           className="mt-3 w-full"
           onClick={() => onAdvance(orders, nextForPickup.status)}
         >
-          <nextForPickup.icon /> {nextForPickup.label}
+          {(() => {
+            const Icon = nextForPickup.icon;
+            return <Icon className="size-4 mr-1.5" />;
+          })()}
+          <span>{nextForPickup.label}</span>
         </Button>
       ) : null}
     </article>

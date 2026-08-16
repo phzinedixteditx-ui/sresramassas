@@ -11,8 +11,9 @@ export const SHRIMP_PRICE = 10;
 export const RESTAURANT_WHATSAPP = "5531999101195";
 export const RESTAURANT_WHATSAPP_LABEL = "+55 31 99910-1195";
 
-export function whatsappLink(phone: string, message?: string) {
-  const digits = phone.replace(/\D/g, "");
+export function whatsappLink(phone?: string | null, message?: string) {
+  const digits = (phone ?? "").replace(/\D/g, "");
+  if (!digits) return "https://api.whatsapp.com";
   const withDdi = digits.startsWith("55") ? digits : `55${digits}`;
   return `https://api.whatsapp.com/send?phone=${withDdi}${message ? `&text=${encodeURIComponent(message)}` : ""}`;
 }

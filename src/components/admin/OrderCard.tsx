@@ -57,6 +57,8 @@ export function OrderCard({
   onCancel: (orders: AdminOrder[]) => void;
 }) {
   const first = orders[0];
+  if (!first) return null;
+
   const status = first.status;
   const next = NEXT[status];
   const nextForPickup =

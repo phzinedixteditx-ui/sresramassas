@@ -263,8 +263,6 @@ function Montar() {
       }
     } catch (err) {
       console.warn("Aviso geral ao gravar pedido:", err);
-    } finally {
-      setSubmitting(false);
     }
 
     const itemsText = allItems
@@ -298,6 +296,10 @@ function Montar() {
       .join("\n");
 
     const link = whatsappLink(RESTAURANT_WHATSAPP, waMessage);
+    // Pedido ja registrado: guarda o link e mantem a trava para que um novo
+    // clique apenas reabra o WhatsApp, sem criar os pedidos de novo.
+    setSentLink(link);
+    setSubmitting(false);
     toast.success("Redirecionando para o WhatsApp...");
 
     try {

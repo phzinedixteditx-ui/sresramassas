@@ -193,12 +193,21 @@ function Montar() {
   }
 
   async function submitOrder() {
+    // Trava imediata: impede duplo clique e reenvio do mesmo pedido
+    // (o estado React nao atualiza a tempo entre dois cliques rapidos).
+    if (sendingRef.current) return;
+    if (sentLink) {
+      window.location.assign(sentLink);
+      return;
+    }
+
     const hasCurrentItem = size && pasta && sauce && saute;
     if (cartItems.length === 0 && !hasCurrentItem) {
       toast.error("Adicione ao menos uma massa ao pedido.");
       return;
     }
 
+    sendingRef.current = true;
     setSubmitting(true);
 
     const allItems = [...cartItems];

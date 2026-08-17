@@ -111,6 +111,9 @@ function Montar() {
   });
   
   const [submitting, setSubmitting] = useState(false);
+  // Trava sincrona (imediata) contra duplo clique e reenvio do mesmo pedido.
+  const sendingRef = useRef(false);
+  const [sentLink, setSentLink] = useState<string | null>(null);
 
   const info = sizeInfo(size);
   const limit = info?.limit ?? 0;

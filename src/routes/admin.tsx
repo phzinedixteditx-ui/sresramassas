@@ -333,6 +333,7 @@ function Dashboard() {
     } catch (e) {
       console.warn("Erro no Realtime do Supabase:", e);
     }
+    return undefined;
   }, [load]);
 
   // Agrupa pedidos do mesmo cliente feitos em janela de 10 minutos

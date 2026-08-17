@@ -121,6 +121,7 @@ function Admin() {
     } catch (e) {
       console.warn("Erro ao registrar onAuthStateChange:", e);
     }
+    return undefined;
   }, [check]);
 
   if (checking) {

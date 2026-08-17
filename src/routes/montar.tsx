@@ -1,6 +1,6 @@
 import { createFileRoute, Link } from "@tanstack/react-router";
 import { ArrowLeft, ArrowRight, CheckCircle2, Loader2, MessageCircle, PartyPopper, Plus } from "lucide-react";
-import { useMemo, useState } from "react";
+import { useMemo, useRef, useState } from "react";
 import { toast } from "sonner";
 
 import { Logo } from "@/components/brand/Logo";
@@ -111,6 +111,9 @@ function Montar() {
   });
   
   const [submitting, setSubmitting] = useState(false);
+  // Trava sincrona (imediata) contra duplo clique e reenvio do mesmo pedido.
+  const sendingRef = useRef(false);
+  const [sentLink, setSentLink] = useState<string | null>(null);
 
   const info = sizeInfo(size);
   const limit = info?.limit ?? 0;
@@ -190,12 +193,21 @@ function Montar() {
   }
 
   async function submitOrder() {
+    // Trava imediata: impede duplo clique e reenvio do mesmo pedido
+    // (o estado React nao atualiza a tempo entre dois cliques rapidos).
+    if (sendingRef.current) return;
+    if (sentLink) {
+      window.location.assign(sentLink);
+      return;
+    }
+
     const hasCurrentItem = size && pasta && sauce && saute;
     if (cartItems.length === 0 && !hasCurrentItem) {
       toast.error("Adicione ao menos uma massa ao pedido.");
       return;
     }
 
+    sendingRef.current = true;
     setSubmitting(true);
 
     const allItems = [...cartItems];
@@ -251,8 +263,6 @@ function Montar() {
       }
     } catch (err) {
       console.warn("Aviso geral ao gravar pedido:", err);
-    } finally {
-      setSubmitting(false);
     }
 
     const itemsText = allItems
@@ -286,6 +296,10 @@ function Montar() {
       .join("\n");
 
     const link = whatsappLink(RESTAURANT_WHATSAPP, waMessage);
+    // Pedido ja registrado: guarda o link e mantem a trava para que um novo
+    // clique apenas reabra o WhatsApp, sem criar os pedidos de novo.
+    setSentLink(link);
+    setSubmitting(false);
     toast.success("Redirecionando para o WhatsApp...");
 
     try {
@@ -636,18 +650,18 @@ function Montar() {
                   variant="gold"
                   size="xl"
                   className="flex-1"
-                  disabled={submitting || (cartItems.length === 0 && !isBuildingItem)}
+                  disabled={submitting || (!sentLink && cartItems.length === 0 && !isBuildingItem)}
                   onClick={submitOrder}
                 >
                   {submitting ? <Loader2 className="animate-spin" /> : <MessageCircle />}
-                  ENVIAR NO WHATSAPP
+                  {sentLink ? "REABRIR WHATSAPP" : "ENVIAR NO WHATSAPP"}
                 </Button>
                 <Button
                   variant="goldOutline"
                   size="xl"
                   className="flex-1"
                   onClick={() => setStep(0)}
-                  disabled={submitting}
+                  disabled={submitting || !!sentLink}
                 >
                   EDITAR PEDIDO
                 </Button>

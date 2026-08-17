@@ -650,18 +650,18 @@ function Montar() {
                   variant="gold"
                   size="xl"
                   className="flex-1"
-                  disabled={submitting || (cartItems.length === 0 && !isBuildingItem)}
+                  disabled={submitting || (!sentLink && cartItems.length === 0 && !isBuildingItem)}
                   onClick={submitOrder}
                 >
                   {submitting ? <Loader2 className="animate-spin" /> : <MessageCircle />}
-                  ENVIAR NO WHATSAPP
+                  {sentLink ? "REABRIR WHATSAPP" : "ENVIAR NO WHATSAPP"}
                 </Button>
                 <Button
                   variant="goldOutline"
                   size="xl"
                   className="flex-1"
                   onClick={() => setStep(0)}
-                  disabled={submitting}
+                  disabled={submitting || !!sentLink}
                 >
                   EDITAR PEDIDO
                 </Button>

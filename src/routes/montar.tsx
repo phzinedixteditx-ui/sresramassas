@@ -1,9 +1,8 @@
-import { createFileRoute, Link } from "@tanstack/react-router";
-import { ArrowLeft, ArrowRight, CheckCircle2, Loader2, MessageCircle, PartyPopper, Plus } from "lucide-react";
-import { useMemo, useRef, useState } from "react";
+import { createFileRoute } from "@tanstack/react-router";
+import { ArrowLeft, ArrowRight, Loader2, MessageCircle, Minus, Plus } from "lucide-react";
+import { useEffect, useMemo, useState } from "react";
 import { toast } from "sonner";
 
-import { Logo } from "@/components/brand/Logo";
 import { OptionCard } from "@/components/order/OptionCard";
 import { StepProgress } from "@/components/order/StepProgress";
 import { SiteFooter } from "@/components/SiteFooter";
@@ -14,12 +13,15 @@ import { Label } from "@/components/ui/label";
 import { Textarea } from "@/components/ui/textarea";
 import { supabase } from "@/integrations/supabase/client";
 import {
+  BEVERAGE_CATEGORIES,
   brl,
+  DESSERT_ITEMS,
   FINISHINGS,
   INGREDIENTS,
   PASTAS,
+  PAYMENT_METHODS,
+  PaymentMethod,
   RESTAURANT_WHATSAPP,
-  RESTAURANT_WHATSAPP_LABEL,
   SAUCES,
   SAUTES,
   SHRIMP_PRICE,
@@ -28,6 +30,7 @@ import {
   type SizeId,
   whatsappLink,
 } from "@/lib/menu";
+import { getStoredUnavailableIngredients } from "@/lib/stock";
 
 export const Route = createFileRoute("/montar")({
   ssr: false,
@@ -37,7 +40,7 @@ export const Route = createFileRoute("/montar")({
       {
         name: "description",
         content:
-          "Monte sua massa em poucos passos: tamanho, tipo de massa, molho, ingredientes, camarão, refogado e finalização.",
+          "Monte sua massa em poucos passos: tamanho, tipo de massa, molhos, ingredientes, camarão, refogado, finalização, bebidas e doces.",
       },
       { property: "og:title", content: "Monte sua massa — Sr e Sra Massas" },
       {
@@ -52,12 +55,14 @@ export const Route = createFileRoute("/montar")({
 const STEP_LABELS = [
   "Tamanho",
   "Massa",
-  "Molho",
+  "Molhos",
   "Ingredientes",
   "Camarão",
   "Refogado",
-  "Finalização",
-  "Seus dados",
+  "Finalização & Nome",
+  "Bebidas",
+  "Doces",
+  "Seus dados & Pagamento",
   "Resumo",
 ];
 
@@ -76,7 +81,7 @@ type Customer = {
 type CartItem = {
   size: SizeId;
   pasta: string;
-  sauce: string;
+  sauces: string[];
   ingredients: string[];
   shrimp: boolean;
   saute: string;
@@ -89,15 +94,26 @@ function Montar() {
   const [step, setStep] = useState(0);
   const [cartItems, setCartItems] = useState<CartItem[]>([]);
 
+  // Estado da massa atual
   const [size, setSize] = useState<SizeId | null>(null);
   const [pasta, setPasta] = useState<string | null>(null);
-  const [sauce, setSauce] = useState<string | null>(null);
+  const [sauces, setSauces] = useState<string[]>([]);
   const [ingredients, setIngredients] = useState<string[]>([]);
   const [shrimp, setShrimp] = useState(false);
   const [saute, setSaute] = useState<string | null>(null);
   const [finishing, setFinishing] = useState<string[]>([]);
   const [massaLabel, setMassaLabel] = useState("");
-  
+
+  // Estado de Bebidas e Doces selecionados (item_id -> quantidade)
+  const [beverageCounts, setBeverageCounts] = useState<{ [key: string]: number }>({});
+  const [dessertCounts, setDessertCounts] = useState<{ [key: string]: number }>({});
+
+  // Estado da forma de pagamento
+  const [paymentMethod, setPaymentMethod] = useState<PaymentMethod | null>(null);
+
+  // Ingredientes indisponíveis
+  const [unavailableIngredients, setUnavailableIngredients] = useState<string[]>([]);
+
   const [customer, setCustomer] = useState<Customer>({
     name: "",
     phone: "",
@@ -109,20 +125,66 @@ function Montar() {
     reference: "",
     notes: "",
   });
-  
+
   const [submitting, setSubmitting] = useState(false);
-  // Trava sincrona (imediata) contra duplo clique e reenvio do mesmo pedido.
-  const sendingRef = useRef(false);
-  const [sentLink, setSentLink] = useState<string | null>(null);
+
+  // Carrega e escuta estoque em tempo real
+  useEffect(() => {
+    setUnavailableIngredients(getStoredUnavailableIngredients());
+    const channel = supabase
+      .channel("stock-events-montar")
+      .on("broadcast", { event: "stock_update" }, (payload: { [key: string]: unknown }) => {
+        const payloadData = payload["payload"] as { unavailable?: string[] } | undefined;
+        if (payloadData?.unavailable) {
+          setUnavailableIngredients(payloadData.unavailable);
+        }
+      })
+      .subscribe();
+
+    return () => {
+      void supabase.removeChannel(channel);
+    };
+  }, []);
 
   const info = sizeInfo(size);
   const limit = info?.limit ?? 0;
   const currentTotal = (info?.price ?? 0) + (shrimp ? SHRIMP_PRICE : 0);
 
   const cartTotal = cartItems.reduce((acc, item) => acc + item.total, 0);
+
+  // Calcula total de bebidas
+  const beveragesTotal = useMemo(() => {
+    let sum = 0;
+    for (const cat of BEVERAGE_CATEGORIES) {
+      for (const item of cat.items) {
+        const count = beverageCounts[item.id] || 0;
+        if (count > 0) sum += item.price * count;
+      }
+    }
+    return sum;
+  }, [beverageCounts]);
+
+  // Calcula total de doces
+  const dessertsTotal = useMemo(() => {
+    let sum = 0;
+    for (const item of DESSERT_ITEMS) {
+      if (item.hasFlavors && item.flavors) {
+        for (const f of item.flavors) {
+          const count = dessertCounts[`${item.id}_${f}`] || 0;
+          if (count > 0) sum += item.price * count;
+        }
+      } else {
+        const count = dessertCounts[item.id] || 0;
+        if (count > 0) sum += item.price * count;
+      }
+    }
+    return sum;
+  }, [dessertCounts]);
+
   const deliveryFee = customer.orderType === "entrega" ? 7 : 0;
   const isBuildingItem = size !== null;
-  const finalTotal = cartTotal + (isBuildingItem ? currentTotal : 0) + deliveryFee;
+  const finalTotal =
+    cartTotal + (isBuildingItem ? currentTotal : 0) + beveragesTotal + dessertsTotal + deliveryFee;
 
   const canAdvance = useMemo(() => {
     switch (step) {
@@ -131,30 +193,49 @@ function Montar() {
       case 1:
         return !!pasta;
       case 2:
-        return !!sauce;
+        return sauces.length > 0;
       case 3:
         return ingredients.length > 0;
       case 5:
         return !!saute;
-      case 7:
+      case 6:
+        return massaLabel.trim().length >= 1;
+      case 7: // Bebidas (opcional)
+        return true;
+      case 8: // Doces (opcional)
+        return true;
+      case 9: // Seus dados & Pagamento
         return (
           customer.name.trim().length >= 2 &&
           (customer.orderType === "local" ||
             customer.phone.replace(/\D/g, "").length >= 10) &&
           (customer.orderType !== "entrega" ||
-            (customer.address.trim() !== "" && customer.neighborhood.trim() !== ""))
+            (customer.address.trim() !== "" && customer.neighborhood.trim() !== "")) &&
+          !!paymentMethod
         );
       default:
         return true;
     }
-  }, [step, size, pasta, sauce, ingredients, saute, customer]);
+  }, [step, size, pasta, sauces, ingredients, saute, massaLabel, customer, paymentMethod]);
+
+  function toggleSauce(sauceName: string) {
+    setSauces((prev) =>
+      prev.includes(sauceName) ? prev.filter((s) => s !== sauceName) : [...prev, sauceName],
+    );
+  }
 
   function toggleIngredient(id: string) {
+    if (unavailableIngredients.includes(id)) {
+      toast.error("⚠️ Ingrediente esgotado", {
+        description: `${id} está temporariamente indisponível hoje.`,
+      });
+      return;
+    }
     setIngredients((prev) => {
       if (prev.includes(id)) return prev.filter((i) => i !== id);
       if (prev.length >= limit) {
         toast.error("Limite atingido", {
-          description: "Você atingiu o limite de ingredientes. Remova um ingrediente para escolher outro.",
+          description: "Você atingiu o limite de ingredientes. Remova um para escolher outro.",
         });
         return prev;
       }
@@ -162,8 +243,46 @@ function Montar() {
     });
   }
 
+  function updateBeverageCount(itemId: string, delta: number) {
+    setBeverageCounts((prev) => {
+      const current = prev[itemId] || 0;
+      const nextVal = Math.max(0, current + delta);
+      if (nextVal === 0) {
+        const copy = { ...prev };
+        delete copy[itemId];
+        return copy;
+      }
+      return { ...prev, [itemId]: nextVal };
+    });
+  }
+
+  function updateDessertCount(key: string, delta: number) {
+    setDessertCounts((prev) => {
+      const current = prev[key] || 0;
+      const nextVal = Math.max(0, current + delta);
+      if (nextVal === 0) {
+        const copy = { ...prev };
+        delete copy[key];
+        return copy;
+      }
+      return { ...prev, [key]: nextVal };
+    });
+  }
+
   function next() {
     if (!canAdvance) {
+      if (step === 6 && !massaLabel.trim()) {
+        toast.error("Identificação obrigatória", {
+          description: "Por favor, informe para quem é essa massa.",
+        });
+        return;
+      }
+      if (step === 9 && !paymentMethod) {
+        toast.error("Forma de pagamento obrigatória", {
+          description: "Por favor, selecione como deseja pagar.",
+        });
+        return;
+      }
       toast.error("Escolha uma opção para continuar");
       return;
     }
@@ -171,17 +290,29 @@ function Montar() {
   }
 
   function addToCartAndAddAnother() {
-    if (!size || !pasta || !sauce || !saute) {
-        toast.error("Termine de montar a massa atual antes de adicionar outra.");
-        return;
+    if (!size || !pasta || sauces.length === 0 || !saute || !massaLabel.trim()) {
+      toast.error("Termine de montar a massa atual antes de adicionar outra.", {
+        description: "Certifique-se de preencher o nome de quem vai comer essa massa.",
+      });
+      return;
     }
     setCartItems((prev) => [
       ...prev,
-      { size, pasta, sauce, ingredients, shrimp, saute, finishing, massaLabel, total: currentTotal },
+      {
+        size,
+        pasta,
+        sauces,
+        ingredients,
+        shrimp,
+        saute,
+        finishing,
+        massaLabel: massaLabel.trim(),
+        total: currentTotal,
+      },
     ]);
     setSize(null);
     setPasta(null);
-    setSauce(null);
+    setSauces([]);
     setIngredients([]);
     setShrimp(false);
     setSaute(null);
@@ -193,120 +324,179 @@ function Montar() {
   }
 
   async function submitOrder() {
-    // Trava imediata: impede duplo clique e reenvio do mesmo pedido
-    // (o estado React nao atualiza a tempo entre dois cliques rapidos).
-    if (sendingRef.current) return;
-    if (sentLink) {
-      window.location.assign(sentLink);
-      return;
-    }
-
-    const hasCurrentItem = size && pasta && sauce && saute;
+    const hasCurrentItem = size && pasta && sauces.length > 0 && saute && massaLabel.trim();
     if (cartItems.length === 0 && !hasCurrentItem) {
-      toast.error("Adicione ao menos uma massa ao pedido.");
+      toast.error("Nenhuma massa configurada");
       return;
     }
 
-    sendingRef.current = true;
     setSubmitting(true);
 
-    const allItems = [...cartItems];
+    const allItems: CartItem[] = [...cartItems];
     if (hasCurrentItem) {
       allItems.push({
         size,
         pasta,
-        sauce,
+        sauces,
         ingredients,
         shrimp,
         saute,
         finishing,
-        massaLabel,
+        massaLabel: massaLabel.trim(),
         total: currentTotal,
       });
     }
 
-    const orderNumbers: number[] = [];
-
-    try {
-      for (const item of allItems) {
-        try {
-          const { data, error } = await supabase.rpc("create_order", {
-            p_customer_name: customer.name.trim(),
-            p_phone: customer.phone ? customer.phone.trim() : "",
-            p_order_type: customer.orderType,
-            p_address: customer.address ? customer.address.trim() : "",
-            p_number: customer.number ? customer.number.trim() : "",
-            p_complement: customer.complement ? customer.complement.trim() : "",
-            p_neighborhood: customer.neighborhood ? customer.neighborhood.trim() : "",
-            p_reference: customer.reference ? customer.reference.trim() : "",
-            p_size: item.size,
-            p_pasta_type: item.pasta,
-            p_sauce: item.sauce,
-            p_ingredients: item.ingredients ?? [],
-            p_shrimp: item.shrimp ?? false,
-            p_saute_type: item.saute,
-            p_finishing: item.finishing ?? [],
-            p_notes: item.massaLabel
-              ? `[Para: ${item.massaLabel}]${customer.notes ? ` ${customer.notes}` : ""}`
-              : customer.notes || "",
-          });
-
-          if (!error && data) {
-            const row = (data as { order_number: number }[] | null)?.[0] ?? null;
-            if (row?.order_number) orderNumbers.push(row.order_number);
-          } else if (error) {
-            console.warn("Aviso ao salvar pedido no painel:", error.message);
-          }
-        } catch (itemErr) {
-          console.warn("Erro ao processar item do pedido:", itemErr);
+    // Prepara lista de bebidas para texto
+    const beverageList: { name: string; count: number; total: number }[] = [];
+    for (const cat of BEVERAGE_CATEGORIES) {
+      for (const item of cat.items) {
+        const count = beverageCounts[item.id] || 0;
+        if (count > 0) {
+          const fullName =
+            cat.name === item.name || cat.items.length === 1
+              ? item.name
+              : `${cat.name} — ${item.name}`;
+          beverageList.push({ name: fullName, count, total: item.price * count });
         }
       }
-    } catch (err) {
-      console.warn("Aviso geral ao gravar pedido:", err);
     }
 
-    const itemsText = allItems
+    // Prepara lista de doces para texto
+    const dessertList: { name: string; count: number; total: number }[] = [];
+    for (const item of DESSERT_ITEMS) {
+      if (item.hasFlavors && item.flavors) {
+        for (const f of item.flavors) {
+          const count = dessertCounts[`${item.id}_${f}`] || 0;
+          if (count > 0) {
+            dessertList.push({
+              name: `${item.name} — ${f}`,
+              count,
+              total: item.price * count,
+            });
+          }
+        }
+      } else {
+        const count = dessertCounts[item.id] || 0;
+        if (count > 0) {
+          dessertList.push({ name: item.name, count, total: item.price * count });
+        }
+      }
+    }
+
+    const orderNumbers: number[] = [];
+    const paymentLabel =
+      PAYMENT_METHODS.find((p) => p.id === paymentMethod)?.label ?? "A combinar";
+
+    // Envia cada massa para a tabela do Supabase
+    for (let i = 0; i < allItems.length; i++) {
+      const item = allItems[i];
+      if (!item) continue;
+      const extraNotesParts: string[] = [];
+      extraNotesParts.push(`[Para: ${item.massaLabel}]`);
+      if (paymentMethod) extraNotesParts.push(`[Pagamento: ${paymentLabel}]`);
+      if (i === 0) {
+        if (beverageList.length > 0) {
+          extraNotesParts.push(
+            `[Bebidas: ${beverageList.map((b) => `${b.count}x ${b.name}`).join(", ")}]`,
+          );
+        }
+        if (dessertList.length > 0) {
+          extraNotesParts.push(
+            `[Doces: ${dessertList.map((d) => `${d.count}x ${d.name}`).join(", ")}]`,
+          );
+        }
+      }
+      if (customer.notes) extraNotesParts.push(customer.notes);
+
+      try {
+        const { data, error } = await supabase.rpc("create_order", {
+          p_customer_name: customer.name,
+          p_phone: customer.phone,
+          p_order_type: customer.orderType,
+          p_address: customer.address,
+          p_number: customer.number,
+          p_complement: customer.complement,
+          p_neighborhood: customer.neighborhood,
+          p_reference: customer.reference,
+          p_size: item.size,
+          p_pasta_type: item.pasta,
+          p_sauce: item.sauces.join(" + "),
+          p_ingredients: item.ingredients,
+          p_shrimp: item.shrimp,
+          p_saute_type: item.saute,
+          p_finishing: item.finishing,
+          p_notes: extraNotesParts.join(" "),
+        });
+
+        if (!error) {
+          const row = (data as { order_number: number }[] | null)?.[0] ?? null;
+          if (row) orderNumbers.push(row.order_number);
+        }
+      } catch (err) {
+        console.error("Erro ao criar pedido no Supabase:", err);
+      }
+    }
+
+    setSubmitting(false);
+
+    // Formatação elegante da mensagem do WhatsApp conforme solicitado
+    const massasText = allItems
       .map((item, idx) => {
-        const labelLine = item.massaLabel ? `- Para: *${item.massaLabel}*\n` : "";
-        const ingText = (item.ingredients?.length ?? 0) > 0 ? item.ingredients.join(", ") : "nenhum";
-        const finText = (item.finishing?.length ?? 0) > 0 ? item.finishing.join(", ") : "nenhuma";
-        return `*Massa ${idx + 1}:*\n${labelLine}- Tamanho: ${sizeInfo(item.size)?.label}\n- Massa: ${item.pasta}\n- Molho: ${item.sauce}\n- Ingredientes: ${ingText}\n- Camarão: ${item.shrimp ? "sim" : "não"}\n- Refogado: ${item.saute}\n- Finalização: ${finText}\n- Valor: ${brl(item.total)}`;
+        return [
+          `*Massa ${idx + 1} — ${item.massaLabel}*`,
+          `• Tamanho: ${sizeInfo(item.size)?.label}`,
+          `• Massa: ${item.pasta}`,
+          `• Molhos: ${item.sauces.join(", ")}`,
+          `• Adicionais: ${item.ingredients.length ? item.ingredients.join(", ") : "Nenhum"}`,
+          item.shrimp ? `• Camarão: Sim (+ ${brl(SHRIMP_PRICE)})` : null,
+          `• Refogado: ${item.saute}`,
+          `• Finalização: ${item.finishing.length ? item.finishing.join(", ") : "Nenhuma"}`,
+          `• Valor: ${brl(item.total)}`,
+        ]
+          .filter(Boolean)
+          .join("\n");
       })
       .join("\n\n");
 
-    const waMessage = [
-      `*Novo Pedido* — Sr e Sra Massas`,
-      orderNumbers.length > 0 ? `(Tickets no painel: #${orderNumbers.join(", #")})` : null,
+    const beveragesText =
+      beverageList.length > 0
+        ? `*🥤 BEBIDAS*\n` +
+          beverageList.map((b) => `• ${b.count}x ${b.name} — ${brl(b.total)}`).join("\n")
+        : null;
+
+    const dessertsText =
+      dessertList.length > 0
+        ? `*🍫 DOCES*\n` +
+          dessertList.map((d) => `• ${d.count}x ${d.name} — ${brl(d.total)}`).join("\n")
+        : null;
+
+    const waMessageParts = [
+      `*🍝 NOVO PEDIDO* — Sr e Sra Massas`,
+      orderNumbers.length > 0 ? `(Painel: #${orderNumbers.join(", #")})` : null,
       ``,
       `*Cliente:* ${customer.name}`,
       customer.orderType === "entrega"
         ? `*Entrega:* ${customer.address}${customer.number ? `, ${customer.number}` : ""}${customer.complement ? ` - ${customer.complement}` : ""}${customer.neighborhood ? ` - ${customer.neighborhood}` : ""}`
         : customer.orderType === "retirada"
-          ? "*Retirada no local*"
+          ? "*Retirada no restaurante*"
           : "*Comer no local*",
       customer.phone ? `*Telefone:* ${customer.phone}` : null,
       customer.notes ? `*Obs. Gerais:* ${customer.notes}` : null,
       ``,
-      itemsText,
+      massasText,
+      beveragesText ? `\n${beveragesText}` : null,
+      dessertsText ? `\n${dessertsText}` : null,
       ``,
-      customer.orderType === "entrega" ? `*Taxa de entrega:* ${brl(7)}` : null,
-      `*TOTAL DO PEDIDO: ${brl(finalTotal)}*`,
-    ]
-      .filter((line) => line !== null)
-      .join("\n");
+      `*💳 FORMA DE PAGAMENTO*`,
+      `${paymentLabel}`,
+      ``,
+      customer.orderType === "entrega" ? `*🛵 Taxa de entrega:* ${brl(7)}` : null,
+      `*💰 TOTAL DO PEDIDO: ${brl(finalTotal)}*`,
+    ].filter((line) => line !== null);
 
-    const link = whatsappLink(RESTAURANT_WHATSAPP, waMessage);
-    // Pedido ja registrado: guarda o link e mantem a trava para que um novo
-    // clique apenas reabra o WhatsApp, sem criar os pedidos de novo.
-    setSentLink(link);
-    setSubmitting(false);
-    toast.success("Redirecionando para o WhatsApp...");
-
-    try {
-      window.location.assign(link);
-    } catch {
-      window.location.href = link;
-    }
+    const link = whatsappLink(RESTAURANT_WHATSAPP, waMessageParts.join("\n"));
+    window.location.href = link;
   }
 
   return (
@@ -316,6 +506,7 @@ function Montar() {
         <StepProgress steps={STEP_LABELS} current={step} onSelect={setStep} />
 
         <div key={step} className="animate-rise mt-8">
+          {/* ETAPA 0: TAMANHO */}
           {step === 0 ? (
             <StepShell
               title="Escolha o tamanho"
@@ -339,8 +530,9 @@ function Montar() {
             </StepShell>
           ) : null}
 
+          {/* ETAPA 1: MASSA */}
           {step === 1 ? (
-            <StepShell title="Escolha sua massa" subtitle="Uma opção por pedido.">
+            <StepShell title="Escolha sua massa" subtitle="Uma opção por prato.">
               <div className="grid gap-3 sm:grid-cols-3">
                 {PASTAS.map((p) => (
                   <OptionCard
@@ -355,22 +547,30 @@ function Montar() {
             </StepShell>
           ) : null}
 
+          {/* ETAPA 2: MOLHOS (MÚLTIPLA SELEÇÃO) */}
           {step === 2 ? (
-            <StepShell title="Escolha seu molho" subtitle="Uma opção por pedido.">
+            <StepShell
+              title="Escolha seus molhos"
+              subtitle="Você pode escolher mais de um molho para misturar!"
+              badge={
+                sauces.length > 0 ? `${sauces.length} selecionado(s)` : "Pelo menos 1 obrigatório"
+              }
+            >
               <div className="grid gap-3 sm:grid-cols-2">
                 {SAUCES.map((s) => (
                   <OptionCard
                     key={s.id}
                     title={s.id}
                     description={s.desc}
-                    selected={sauce === s.id}
-                    onClick={() => setSauce(s.id)}
+                    selected={sauces.includes(s.id)}
+                    onClick={() => toggleSauce(s.id)}
                   />
                 ))}
               </div>
             </StepShell>
           ) : null}
 
+          {/* ETAPA 3: INGREDIENTES */}
           {step === 3 ? (
             <StepShell
               title="Escolha seus ingredientes"
@@ -378,21 +578,34 @@ function Montar() {
               badge={`${ingredients.length} / ${limit} ingredientes`}
             >
               <div className="grid grid-cols-2 gap-3 sm:grid-cols-3 lg:grid-cols-4">
-                {INGREDIENTS.map((i) => (
-                  <OptionCard
-                    key={i.id}
-                    compact
-                    emoji={i.emoji}
-                    title={i.id}
-                    selected={ingredients.includes(i.id)}
-                    disabled={!ingredients.includes(i.id) && ingredients.length >= limit}
-                    onClick={() => toggleIngredient(i.id)}
-                  />
-                ))}
+                {INGREDIENTS.map((i) => {
+                  const isUnavailable = unavailableIngredients.includes(i.id);
+                  return (
+                    <div key={i.id} className="relative">
+                      <OptionCard
+                        compact
+                        emoji={i.emoji}
+                        title={i.id}
+                        selected={ingredients.includes(i.id)}
+                        disabled={
+                          isUnavailable ||
+                          (!ingredients.includes(i.id) && ingredients.length >= limit)
+                        }
+                        onClick={() => toggleIngredient(i.id)}
+                      />
+                      {isUnavailable ? (
+                        <span className="absolute -top-1.5 -right-1.5 rounded-full bg-red-600 px-2 py-0.5 text-[9px] font-bold text-white shadow">
+                          Esgotado
+                        </span>
+                      ) : null}
+                    </div>
+                  );
+                })}
               </div>
             </StepShell>
           ) : null}
 
+          {/* ETAPA 4: CAMARÃO */}
           {step === 4 ? (
             <StepShell
               title="Quer adicionar camarão?"
@@ -417,8 +630,9 @@ function Montar() {
             </StepShell>
           ) : null}
 
+          {/* ETAPA 5: REFOGADO */}
           {step === 5 ? (
-            <StepShell title="Como você quer refogar?" subtitle="Uma opção por pedido.">
+            <StepShell title="Como você quer refogar?" subtitle="Uma opção por massa.">
               <div className="grid gap-3 sm:grid-cols-2">
                 {SAUTES.map((s) => (
                   <OptionCard
@@ -434,10 +648,11 @@ function Montar() {
             </StepShell>
           ) : null}
 
+          {/* ETAPA 6: FINALIZAÇÃO & NOME OBRIGATÓRIO */}
           {step === 6 ? (
             <StepShell
-              title="Escolha sua finalização"
-              subtitle="Pode escolher quantas quiser."
+              title="Finalização e Identificação"
+              subtitle="Escolha os toques finais e informe obrigatoriamente de quem é este prato."
               badge={`${finishing.length} selecionadas`}
             >
               <div className="grid grid-cols-2 gap-3 sm:grid-cols-3">
@@ -456,25 +671,271 @@ function Montar() {
                   />
                 ))}
               </div>
-              <div className="mt-5">
-                <Field label="Para quem é essa massa? (opcional)">
+
+              <div className="mt-8 rounded-2xl border border-gold/40 bg-gold/5 p-5">
+                <Field label="Para quem é essa massa? (OBRIGATÓRIO)">
                   <Input
+                    required
                     value={massaLabel}
                     maxLength={50}
-                    placeholder="Ex.: João, Maria, Eu..."
+                    placeholder="Ex.: Pedro, Maria, Matheus..."
+                    className="border-gold/50 bg-background text-base font-semibold"
                     onChange={(e) => setMassaLabel(e.target.value)}
                   />
                 </Field>
                 <p className="mt-1.5 text-xs text-muted-foreground">
-                  A cozinha vai colocar esse nome na embalagem.
+                  A cozinha identificará a embalagem com este nome (Ex:{" "}
+                  <strong>Massa {cartItems.length + 1} — {massaLabel || "Pedro"}</strong>).
                 </p>
               </div>
             </StepShell>
           ) : null}
 
+          {/* ETAPA 7: BEBIDAS (OPCIONAL) */}
           {step === 7 ? (
-            <StepShell title="Seus dados" subtitle="Para prepararmos e entregarmos certinho.">
-              <div className="grid gap-4">
+            <StepShell
+              title="Bebidas (Opcional)"
+              subtitle="Escolha bebidas para acompanhar seu pedido ou clique em Continuar para pular."
+              badge={
+                beveragesTotal > 0
+                  ? `Bebidas: + ${brl(beveragesTotal)}`
+                  : "Etapa opcional"
+              }
+            >
+              <div className="space-y-6">
+                {BEVERAGE_CATEGORIES.map((cat) => (
+                  <div
+                    key={cat.id}
+                    className="panel overflow-hidden border border-border/80 p-4 transition-all"
+                  >
+                    <div className="flex flex-col gap-4 sm:flex-row sm:items-center">
+                      <div className="relative h-28 w-full overflow-hidden rounded-xl bg-muted sm:h-24 sm:w-28 shrink-0">
+                        <img
+                          src={cat.image}
+                          alt={cat.name}
+                          className="h-full w-full object-cover"
+                          loading="lazy"
+                        />
+                      </div>
+                      <div className="flex-1">
+                        <div className="flex items-baseline justify-between">
+                          <h3 className="font-display text-lg font-bold text-foreground">
+                            {cat.name}
+                          </h3>
+                          {cat.defaultPrice ? (
+                            <span className="font-display text-sm font-bold text-gold">
+                              {brl(cat.defaultPrice)}
+                            </span>
+                          ) : null}
+                        </div>
+
+                        <div className="mt-3 grid gap-2.5 sm:grid-cols-2">
+                          {cat.items.map((item) => {
+                            const count = beverageCounts[item.id] || 0;
+                            return (
+                              <div
+                                key={item.id}
+                                className={`flex items-center justify-between rounded-xl border p-2.5 transition-colors ${
+                                  count > 0
+                                    ? "border-gold/60 bg-gold/10"
+                                    : "border-border/60 bg-secondary/30"
+                                }`}
+                              >
+                                <div>
+                                  <p className="text-xs font-semibold text-foreground">
+                                    {item.name}
+                                  </p>
+                                  <p className="text-[11px] text-gold">{brl(item.price)}</p>
+                                </div>
+                                <div className="flex items-center gap-2">
+                                  {count > 0 ? (
+                                    <>
+                                      <button
+                                        type="button"
+                                        onClick={() => updateBeverageCount(item.id, -1)}
+                                        className="flex size-7 items-center justify-center rounded-lg bg-secondary text-foreground hover:bg-gold/20"
+                                      >
+                                        <Minus className="size-3.5" />
+                                      </button>
+                                      <span className="w-5 text-center font-display text-sm font-bold text-gold">
+                                        {count}
+                                      </span>
+                                    </>
+                                  ) : null}
+                                  <button
+                                    type="button"
+                                    onClick={() => updateBeverageCount(item.id, 1)}
+                                    className="flex size-7 items-center justify-center rounded-lg bg-gold text-background font-bold hover:bg-gold/90 transition-transform active:scale-95"
+                                  >
+                                    <Plus className="size-3.5" />
+                                  </button>
+                                </div>
+                              </div>
+                            );
+                          })}
+                        </div>
+                      </div>
+                    </div>
+                  </div>
+                ))}
+              </div>
+            </StepShell>
+          ) : null}
+
+          {/* ETAPA 8: DOCES (OPCIONAL) */}
+          {step === 8 ? (
+            <StepShell
+              title="Doces e Sobremesas (Opcional)"
+              subtitle="Que tal um doce para finalizar? Escolha suas opções ou clique em Continuar."
+              badge={
+                dessertsTotal > 0 ? `Doces: + ${brl(dessertsTotal)}` : "Etapa opcional"
+              }
+            >
+              <div className="grid gap-4 sm:grid-cols-2">
+                {DESSERT_ITEMS.map((item) => {
+                  if (item.hasFlavors && item.flavors) {
+                    return (
+                      <div
+                        key={item.id}
+                        className="panel sm:col-span-2 overflow-hidden border border-border/80 p-4"
+                      >
+                        <div className="flex flex-col gap-4 sm:flex-row sm:items-center">
+                          {item.image ? (
+                            <div className="relative h-28 w-full overflow-hidden rounded-xl bg-muted sm:h-24 sm:w-28 shrink-0">
+                              <img
+                                src={item.image}
+                                alt={item.name}
+                                className="h-full w-full object-cover"
+                                loading="lazy"
+                              />
+                            </div>
+                          ) : null}
+                          <div className="flex-1">
+                            <div className="flex items-baseline justify-between">
+                              <h3 className="font-display text-lg font-bold text-foreground">
+                                {item.name}
+                              </h3>
+                              <span className="font-display text-sm font-bold text-gold">
+                                {brl(item.price)}
+                              </span>
+                            </div>
+                            <p className="text-xs text-muted-foreground mt-0.5">
+                              Escolha as unidades por sabor:
+                            </p>
+
+                            <div className="mt-3 grid gap-2.5 sm:grid-cols-3">
+                              {item.flavors.map((flavor) => {
+                                const key = `${item.id}_${flavor}`;
+                                const count = dessertCounts[key] || 0;
+                                return (
+                                  <div
+                                    key={flavor}
+                                    className={`flex items-center justify-between rounded-xl border p-2.5 transition-colors ${
+                                      count > 0
+                                        ? "border-gold/60 bg-gold/10"
+                                        : "border-border/60 bg-secondary/30"
+                                    }`}
+                                  >
+                                    <div>
+                                      <p className="text-xs font-semibold text-foreground">
+                                        {flavor}
+                                      </p>
+                                      <p className="text-[11px] text-gold">{brl(item.price)}</p>
+                                    </div>
+                                    <div className="flex items-center gap-2">
+                                      {count > 0 ? (
+                                        <>
+                                          <button
+                                            type="button"
+                                            onClick={() => updateDessertCount(key, -1)}
+                                            className="flex size-7 items-center justify-center rounded-lg bg-secondary text-foreground hover:bg-gold/20"
+                                          >
+                                            <Minus className="size-3.5" />
+                                          </button>
+                                          <span className="w-5 text-center font-display text-sm font-bold text-gold">
+                                            {count}
+                                          </span>
+                                        </>
+                                      ) : null}
+                                      <button
+                                        type="button"
+                                        onClick={() => updateDessertCount(key, 1)}
+                                        className="flex size-7 items-center justify-center rounded-lg bg-gold text-background font-bold hover:bg-gold/90 transition-transform active:scale-95"
+                                      >
+                                        <Plus className="size-3.5" />
+                                      </button>
+                                    </div>
+                                  </div>
+                                );
+                              })}
+                            </div>
+                          </div>
+                        </div>
+                      </div>
+                    );
+                  }
+
+                  const count = dessertCounts[item.id] || 0;
+                  return (
+                    <div
+                      key={item.id}
+                      className={`panel flex items-center gap-3.5 p-3.5 border transition-all ${
+                        count > 0 ? "border-gold/60 bg-gold/5" : "border-border/70"
+                      }`}
+                    >
+                      {item.image ? (
+                        <div className="relative size-16 shrink-0 overflow-hidden rounded-lg bg-muted">
+                          <img
+                            src={item.image}
+                            alt={item.name}
+                            className="h-full w-full object-cover"
+                            loading="lazy"
+                          />
+                        </div>
+                      ) : null}
+                      <div className="flex-1">
+                        <h4 className="font-display text-sm font-bold text-foreground">
+                          {item.name}
+                        </h4>
+                        <p className="text-xs font-semibold text-gold">{brl(item.price)}</p>
+                      </div>
+                      <div className="flex items-center gap-2">
+                        {count > 0 ? (
+                          <>
+                            <button
+                              type="button"
+                              onClick={() => updateDessertCount(item.id, -1)}
+                              className="flex size-7 items-center justify-center rounded-lg bg-secondary text-foreground hover:bg-gold/20"
+                            >
+                              <Minus className="size-3.5" />
+                            </button>
+                            <span className="w-5 text-center font-display text-sm font-bold text-gold">
+                              {count}
+                            </span>
+                          </>
+                        ) : null}
+                        <button
+                          type="button"
+                          onClick={() => updateDessertCount(item.id, 1)}
+                          className="flex size-7 items-center justify-center rounded-lg bg-gold text-background font-bold hover:bg-gold/90 transition-transform active:scale-95"
+                        >
+                          <Plus className="size-3.5" />
+                        </button>
+                      </div>
+                    </div>
+                  );
+                })}
+              </div>
+            </StepShell>
+          ) : null}
+
+          {/* ETAPA 9: SEUS DADOS & FORMA DE PAGAMENTO */}
+          {step === 9 ? (
+            <StepShell
+              title="Seus dados & Forma de pagamento"
+              subtitle="Informe onde entregar e como deseja realizar o pagamento no momento do pedido."
+            >
+              <div className="grid gap-5">
                 <div
                   className={
                     customer.orderType === "local" ? "grid gap-4" : "grid gap-4 sm:grid-cols-2"
@@ -516,7 +977,7 @@ function Montar() {
                   />
                   <OptionCard
                     title="Entrega"
-                    description="Levamos até você"
+                    description="Levamos até você (+ R$ 7)"
                     selected={customer.orderType === "entrega"}
                     onClick={() => setCustomer({ ...customer, orderType: "entrega" })}
                   />
@@ -527,31 +988,36 @@ function Montar() {
                     <Field label="Endereço">
                       <Input
                         value={customer.address}
+                        placeholder="Rua, Avenida..."
                         onChange={(e) => setCustomer({ ...customer, address: e.target.value })}
                       />
                     </Field>
                     <Field label="Número">
                       <Input
                         value={customer.number}
+                        placeholder="Nº"
                         onChange={(e) => setCustomer({ ...customer, number: e.target.value })}
                       />
                     </Field>
                     <Field label="Complemento">
                       <Input
                         value={customer.complement}
+                        placeholder="Apto, Bloco..."
                         onChange={(e) => setCustomer({ ...customer, complement: e.target.value })}
                       />
                     </Field>
                     <Field label="Bairro">
                       <Input
                         value={customer.neighborhood}
+                        placeholder="Bairro"
                         onChange={(e) => setCustomer({ ...customer, neighborhood: e.target.value })}
                       />
                     </Field>
                     <div className="sm:col-span-2">
-                      <Field label="Referência">
+                      <Field label="Ponto de Referência">
                         <Input
                           value={customer.reference}
+                          placeholder="Próximo a..."
                           onChange={(e) => setCustomer({ ...customer, reference: e.target.value })}
                         />
                       </Field>
@@ -559,11 +1025,40 @@ function Montar() {
                   </div>
                 ) : null}
 
-                <Field label="Observações do pedido">
+                {/* FORMA DE PAGAMENTO (OBRIGATÓRIO) */}
+                <div className="mt-2 space-y-3 rounded-2xl border border-gold/30 bg-gold/5 p-4">
+                  <div>
+                    <Label className="text-xs font-bold tracking-wider text-gold uppercase">
+                      Forma de Pagamento (Obrigatório)
+                    </Label>
+                    <p className="text-xs text-muted-foreground mt-0.5">
+                      Informe como irá pagar ao receber ou retirar seu pedido:
+                    </p>
+                  </div>
+                  <div className="grid grid-cols-2 gap-2.5 sm:grid-cols-4">
+                    {PAYMENT_METHODS.map((pm) => (
+                      <button
+                        key={pm.id}
+                        type="button"
+                        onClick={() => setPaymentMethod(pm.id)}
+                        className={`flex flex-col items-center justify-center gap-1.5 rounded-xl border p-3 text-center transition-all ${
+                          paymentMethod === pm.id
+                            ? "border-gold bg-gold/20 text-gold shadow-md"
+                            : "border-border/80 bg-secondary/40 text-foreground hover:border-gold/40"
+                        }`}
+                      >
+                        <span className="text-xl">{pm.iconEmoji}</span>
+                        <span className="text-xs font-bold">{pm.label}</span>
+                      </button>
+                    ))}
+                  </div>
+                </div>
+
+                <Field label="Observações adicionais (opcional)">
                   <Textarea
                     value={customer.notes}
                     maxLength={400}
-                    placeholder="Ex.: não colocar cebola."
+                    placeholder="Ex.: Troco para 50, sem cebola, etc."
                     onChange={(e) => setCustomer({ ...customer, notes: e.target.value })}
                   />
                 </Field>
@@ -571,20 +1066,25 @@ function Montar() {
             </StepShell>
           ) : null}
 
-          {step === 8 ? (
-            <StepShell title="Resumo" subtitle="Confira tudo antes de confirmar.">
+          {/* ETAPA 10: RESUMO */}
+          {step === 10 ? (
+            <StepShell title="Resumo do Pedido" subtitle="Confira tudo antes de enviar ao restaurante.">
               <div className="space-y-4">
                 {cartItems.map((item, idx) => (
                   <div key={idx} className="panel divide-y divide-border/70 relative">
-                    <div className="p-4 bg-gold/5 font-bold text-gold border-b border-border/70 flex justify-between">
-                      <span>Massa {idx + 1}</span>
+                    <div className="p-4 bg-gold/5 font-bold text-gold border-b border-border/70 flex justify-between items-center">
+                      <span>
+                        Massa {idx + 1} — {item.massaLabel}
+                      </span>
                       <span>{brl(item.total)}</span>
                     </div>
                     <SummaryRow label="Tamanho" value={sizeInfo(item.size)?.label ?? "-"} />
                     <SummaryRow label="Massa" value={item.pasta ?? "-"} />
-                    <SummaryRow label="Molho" value={item.sauce ?? "-"} />
+                    <SummaryRow label="Molhos" list={item.sauces} />
                     <SummaryRow label="Ingredientes" list={item.ingredients} />
-                    {item.shrimp && <SummaryRow label="Camarão" value="Sim" extra={`+ ${brl(SHRIMP_PRICE)}`} />}
+                    {item.shrimp && (
+                      <SummaryRow label="Camarão" value="Sim" extra={`+ ${brl(SHRIMP_PRICE)}`} />
+                    )}
                     <SummaryRow label="Refogado" value={item.saute ?? "-"} />
                     <SummaryRow label="Finalização" list={item.finishing} />
                   </div>
@@ -592,27 +1092,99 @@ function Montar() {
 
                 {isBuildingItem && (
                   <div className="panel divide-y divide-border/70 relative border-gold/50 shadow-gold/10 shadow-lg">
-                    <div className="p-4 bg-gold/10 font-bold text-gold border-b border-border/70 flex justify-between">
-                      <span>Massa {cartItems.length + 1} (Atual)</span>
+                    <div className="p-4 bg-gold/10 font-bold text-gold border-b border-border/70 flex justify-between items-center">
+                      <span>
+                        Massa {cartItems.length + 1} — {massaLabel || "Atual"}
+                      </span>
                       <span>{brl(currentTotal)}</span>
                     </div>
-                    <SummaryRow label="Tamanho" value={info?.label ?? "-"} extra={brl(info?.price ?? 0)} />
+                    <SummaryRow
+                      label="Tamanho"
+                      value={info?.label ?? "-"}
+                      extra={brl(info?.price ?? 0)}
+                    />
                     <SummaryRow label="Massa" value={pasta ?? "-"} />
-                    <SummaryRow label="Molho" value={sauce ?? "-"} />
+                    <SummaryRow label="Molhos" list={sauces} />
                     <SummaryRow label="Ingredientes" list={ingredients} />
-                    {shrimp && <SummaryRow label="Camarão" value="Sim" extra={`+ ${brl(SHRIMP_PRICE)}`} />}
+                    {shrimp && (
+                      <SummaryRow label="Camarão" value="Sim" extra={`+ ${brl(SHRIMP_PRICE)}`} />
+                    )}
                     <SummaryRow label="Refogado" value={saute ?? "-"} />
                     <SummaryRow label="Finalização" list={finishing} />
                   </div>
                 )}
-                
+
                 <Button variant="outline" className="w-full mt-4" onClick={addToCartAndAddAnother}>
                   <Plus className="mr-2" /> ADICIONAR OUTRA MASSA AO PEDIDO
                 </Button>
 
-                <div className="panel divide-y divide-border/70 mt-8">
+                {/* Resumo de Bebidas e Doces */}
+                {(beveragesTotal > 0 || dessertsTotal > 0) && (
+                  <div className="panel divide-y divide-border/70">
+                    {beveragesTotal > 0 && (
+                      <div className="p-4">
+                        <p className="text-xs font-bold tracking-wider text-gold uppercase mb-2">
+                          🥤 Bebidas Selecionadas
+                        </p>
+                        <div className="space-y-1 text-sm">
+                          {BEVERAGE_CATEGORIES.flatMap((c) => c.items).map((item) => {
+                            const count = beverageCounts[item.id] || 0;
+                            if (count === 0) return null;
+                            return (
+                              <div key={item.id} className="flex justify-between">
+                                <span>
+                                  {count}x {item.name}
+                                </span>
+                                <span className="font-semibold">{brl(item.price * count)}</span>
+                              </div>
+                            );
+                          })}
+                        </div>
+                      </div>
+                    )}
+
+                    {dessertsTotal > 0 && (
+                      <div className="p-4">
+                        <p className="text-xs font-bold tracking-wider text-gold uppercase mb-2">
+                          🍫 Doces Selecionados
+                        </p>
+                        <div className="space-y-1 text-sm">
+                          {DESSERT_ITEMS.map((item) => {
+                            if (item.hasFlavors && item.flavors) {
+                              return item.flavors.map((f) => {
+                                const count = dessertCounts[`${item.id}_${f}`] || 0;
+                                if (count === 0) return null;
+                                return (
+                                  <div key={f} className="flex justify-between">
+                                    <span>
+                                      {count}x {item.name} ({f})
+                                    </span>
+                                    <span className="font-semibold">{brl(item.price * count)}</span>
+                                  </div>
+                                );
+                              });
+                            }
+                            const count = dessertCounts[item.id] || 0;
+                            if (count === 0) return null;
+                            return (
+                              <div key={item.id} className="flex justify-between">
+                                <span>
+                                  {count}x {item.name}
+                                </span>
+                                <span className="font-semibold">{brl(item.price * count)}</span>
+                              </div>
+                            );
+                          })}
+                        </div>
+                      </div>
+                    )}
+                  </div>
+                )}
+
+                {/* Dados do Cliente e Pagamento */}
+                <div className="panel divide-y divide-border/70 mt-6">
                   <div className="p-4 bg-muted/30 font-bold border-b border-border/70">
-                    Dados do Cliente
+                    Dados e Entrega
                   </div>
                   <SummaryRow
                     label="Cliente"
@@ -623,7 +1195,7 @@ function Montar() {
                     }
                   />
                   <SummaryRow
-                    label="Pedido"
+                    label="Entrega"
                     value={
                       customer.orderType === "entrega"
                         ? `${customer.address}, ${customer.number} — ${customer.neighborhood}`
@@ -632,12 +1204,20 @@ function Montar() {
                           : "Retirada no restaurante"
                     }
                   />
+                  <SummaryRow
+                    label="Forma de Pagamento"
+                    value={
+                      PAYMENT_METHODS.find((p) => p.id === paymentMethod)?.label ?? "Não informada"
+                    }
+                  />
                   {customer.orderType === "entrega" && (
                     <SummaryRow label="Taxa de Entrega" value="Fixo" extra={brl(7)} />
                   )}
                   {customer.notes ? <SummaryRow label="Observações" value={customer.notes} /> : null}
                   <div className="flex items-center justify-between p-5">
-                    <span className="font-display text-lg font-bold text-foreground">TOTAL DO PEDIDO</span>
+                    <span className="font-display text-lg font-bold text-foreground">
+                      TOTAL DO PEDIDO
+                    </span>
                     <span className="font-display text-3xl font-bold text-gradient-gold">
                       {brl(finalTotal)}
                     </span>
@@ -645,32 +1225,41 @@ function Montar() {
                 </div>
               </div>
 
-              <div className="mt-6 flex flex-col gap-3 sm:flex-row">
-                <Button
-                  variant="gold"
-                  size="xl"
-                  className="flex-1"
-                  disabled={submitting || (!sentLink && cartItems.length === 0 && !isBuildingItem)}
-                  onClick={submitOrder}
-                >
-                  {submitting ? <Loader2 className="animate-spin" /> : <MessageCircle />}
-                  {sentLink ? "REABRIR WHATSAPP" : "ENVIAR NO WHATSAPP"}
-                </Button>
-                <Button
-                  variant="goldOutline"
-                  size="xl"
-                  className="flex-1"
-                  onClick={() => setStep(0)}
-                  disabled={submitting || !!sentLink}
-                >
-                  EDITAR PEDIDO
-                </Button>
+              {/* Botões de Ação */}
+              <div className="mt-6">
+                <div className="flex flex-col gap-3 sm:flex-row">
+                  <Button
+                    variant="gold"
+                    size="xl"
+                    className="flex-1"
+                    disabled={submitting || (cartItems.length === 0 && !isBuildingItem)}
+                    onClick={submitOrder}
+                  >
+                    {submitting ? <Loader2 className="animate-spin" /> : <MessageCircle />}
+                    ENVIAR NO WHATSAPP
+                  </Button>
+                  <Button
+                    variant="goldOutline"
+                    size="xl"
+                    className="flex-1"
+                    onClick={() => setStep(0)}
+                    disabled={submitting}
+                  >
+                    EDITAR PEDIDO
+                  </Button>
+                </div>
+
+                {/* ⚠️ LEMBRETE FIXO APÓS ENVIAR O PEDIDO */}
+                <p className="mt-3 text-center text-xs font-semibold text-gold">
+                  ⚠️ Aguarde a confirmação do seu pedido pelo WhatsApp.
+                </p>
               </div>
             </StepShell>
           ) : null}
         </div>
       </main>
 
+      {/* Barra fixa de navegação inferior */}
       <div className="fixed inset-x-0 bottom-0 z-40 border-t border-border/70 bg-background/95 backdrop-blur-xl">
         <div className="mx-auto flex max-w-3xl items-center gap-3 px-4 py-3 sm:px-6">
           <Button

@@ -9,7 +9,6 @@ const NAV = [
   { to: "/", label: "Início" },
   { to: "/montar", label: "Monte sua Massa" },
   { to: "/cardapio", label: "Cardápio" },
-  { to: "/acompanhar", label: "Acompanhar Pedido" },
 ] as const;
 
 export function SiteHeader() {

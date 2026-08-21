@@ -69,39 +69,6 @@ export interface RootRouteChildren {
   MontarRoute: typeof MontarRoute
 }
 
-declare module '@tanstack/react-router' {
-  interface FileRoutesByPath {
-    '/': {
-      id: '/'
-      path: '/'
-      fullPath: '/'
-      preLoaderRoute: typeof IndexRouteImport
-      parentRoute: typeof rootRouteImport
-    }
-    '/admin': {
-      id: '/admin'
-      path: '/admin'
-      fullPath: '/admin'
-      preLoaderRoute: typeof AdminRouteImport
-      parentRoute: typeof rootRouteImport
-    }
-    '/cardapio': {
-      id: '/cardapio'
-      path: '/cardapio'
-      fullPath: '/cardapio'
-      preLoaderRoute: typeof CardapioRouteImport
-      parentRoute: typeof rootRouteImport
-    }
-    '/montar': {
-      id: '/montar'
-      path: '/montar'
-      fullPath: '/montar'
-      preLoaderRoute: typeof MontarRouteImport
-      parentRoute: typeof rootRouteImport
-    }
-  }
-}
-
 const rootRouteChildren: RootRouteChildren = {
   IndexRoute: IndexRoute,
   AdminRoute: AdminRoute,

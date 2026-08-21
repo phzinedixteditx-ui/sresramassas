@@ -179,7 +179,7 @@ export type DessertItem = {
   id: string;
   name: string;
   price: number;
-  image?: string; // Opcional (Patê e Pavê SEM imagem)
+  image?: string;
   hasFlavors?: boolean;
   flavors?: string[];
 };
@@ -231,7 +231,7 @@ export const DESSERT_ITEMS: DessertItem[] = [
     id: "pave",
     name: "Pavê",
     price: 10.0,
-    image: "/images/PAVE.jpg",
+    image: "/images/PAVE.jpeg",
     hasFlavors: true,
     flavors: ["Amendoim", "Coco", "Morango"],
   },

@@ -1,6 +1,6 @@
 import { createFileRoute } from "@tanstack/react-router";
-import { Bell, ChefHat, Layers, Loader2, LogOut, RefreshCw } from "lucide-react";
-import { useCallback, useEffect, useState } from "react";
+import { Bell, ChefHat, Layers, Loader2, LogOut, RefreshCw, Search } from "lucide-react";
+import { useCallback, useEffect, useMemo, useState } from "react";
 import { toast } from "sonner";
 
 import { Logo } from "@/components/brand/Logo";
@@ -8,9 +8,16 @@ import { OrderCard, type AdminOrder } from "@/components/admin/OrderCard";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
-import { Skeleton } from "@/components/ui/skeleton";
 import { supabase } from "@/integrations/supabase/client";
-import { brl, INGREDIENTS, STATUS_FLOW, type OrderStatus } from "@/lib/menu";
+import {
+  brl,
+  FINISHINGS,
+  INGREDIENTS,
+  PASTAS,
+  SAUCES,
+  SAUTES,
+  type OrderStatus,
+} from "@/lib/menu";
 import { getStoredUnavailableIngredients, saveUnavailableIngredients } from "@/lib/stock";
 
 export const Route = createFileRoute("/admin")({
@@ -33,7 +40,6 @@ function Admin() {
   const [signedIn, setSignedIn] = useState(false);
 
   const check = useCallback(async () => {
-    // 1. Verifica se já está autenticado localmente
     if (typeof window !== "undefined" && localStorage.getItem("admin_local_auth") === "true") {
       setSignedIn(true);
       setIsStaff(true);
@@ -137,7 +143,6 @@ function AdminLogin({ onLocalSuccess }: { onLocalSuccess: () => void }) {
 
     setLoading(true);
 
-    // Fallback mestre direto para equipe/restaurante
     const MASTER_PASSWORDS = ["123456", "admin", "admin123", "srsramassas", "restaurante"];
     if (MASTER_PASSWORDS.includes(password.toLowerCase()) || password.length >= 4) {
       localStorage.setItem("admin_local_auth", "true");
@@ -246,7 +251,6 @@ function Dashboard({ onLogout }: { onLogout?: () => void }) {
   const [loading, setLoading] = useState(true);
   const [unavailableIngredients, setUnavailableIngredients] = useState<string[]>([]);
 
-  // Carrega lista de estoque indisponível
   useEffect(() => {
     setUnavailableIngredients(getStoredUnavailableIngredients());
     const channel = supabase
@@ -281,14 +285,12 @@ function Dashboard({ onLogout }: { onLogout?: () => void }) {
   const load = useCallback(async () => {
     const cutoff24h = new Date(Date.now() - 24 * 60 * 60 * 1000).toISOString();
 
-    // 1. Exclui automaticamente do banco qualquer pedido feito há mais de 24 horas
     try {
       await supabase.from("orders").delete().lt("created_at", cutoff24h);
     } catch {
-      /* fallback */
+      //
     }
 
-    // 2. Busca apenas pedidos dentro da janela de 24 horas
     const { data, error } = await supabase
       .from("orders")
       .select("*")
@@ -331,7 +333,7 @@ function Dashboard({ onLogout }: { onLogout?: () => void }) {
               "data:audio/wav;base64,UklGRl9vT19XQVZFZm10IBAAAAABAAEAQB8AAEAfAAABAAgAZGF0YQ==",
             ).play();
           } catch {
-            /* som opcional */
+            //
           }
         },
       )
@@ -351,21 +353,24 @@ function Dashboard({ onLogout }: { onLogout?: () => void }) {
     };
   }, [load]);
 
-  // Agrupa pedidos do mesmo cliente feitos em janela de 10 minutos
   function groupOrders(list: AdminOrder[]): AdminOrder[][] {
     const groups: AdminOrder[][] = [];
     const used = new Set<string>();
-    for (const order of list) {
-      if (used.has(order.id)) continue;
-      const t = new Date(order.created_at).getTime();
-      const group = list.filter((o) => {
-        if (used.has(o.id)) return false;
-        const ot = new Date(o.created_at).getTime();
-        return (
-          o.customer_name === order.customer_name &&
-          o.phone === order.phone &&
-          Math.abs(ot - t) <= 10 * 60 * 1000
-        );
+
+    for (let i = 0; i < list.length; i++) {
+      const o1 = list[i];
+      if (used.has(o1.id)) continue;
+      const group: AdminOrder[] = [o1];
+      const t1 = new Date(o1.created_at).getTime();
+
+      list.forEach((o2, j) => {
+        if (i === j || used.has(o2.id)) return;
+        if (o1.phone && o2.phone && o1.phone !== o2.phone) return;
+        if (!o1.phone && o1.customer_name !== o2.customer_name) return;
+        const t2 = new Date(o2.created_at).getTime();
+        if (Math.abs(t1 - t2) <= 10 * 60 * 1000) {
+          group.push(o2);
+        }
       });
       group.forEach((o) => used.add(o.id));
       groups.push(group);
@@ -407,16 +412,16 @@ function Dashboard({ onLogout }: { onLogout?: () => void }) {
     <div className="min-h-screen bg-background">
       <header className="sticky top-0 z-40 border-b border-border/70 bg-background/90 backdrop-blur-xl">
         <div className="mx-auto flex max-w-[110rem] items-center justify-between gap-4 px-4 py-3 sm:px-6">
-          <div className="flex items-center gap-3">
-            <Logo size={44} />
+          <div className="flex items-center gap-4">
+            <Logo size={42} />
             <div>
-              <p className="font-display text-sm font-bold text-gold">PAINEL DE CONTROLE</p>
+              <p className="font-display text-sm font-bold tracking-wide text-foreground">
+                PAINEL DA COZINHA
+              </p>
               <p className="text-xs text-muted-foreground">Sr e Sra Massas</p>
             </div>
-          </div>
 
-          <div className="flex items-center gap-2">
-            <div className="flex rounded-xl bg-secondary/70 p-1 border border-border">
+            <div className="ml-4 flex items-center rounded-xl border border-border/70 bg-background/50 p-1">
               <button
                 type="button"
                 onClick={() => setTab("orders")}
@@ -449,7 +454,11 @@ function Dashboard({ onLogout }: { onLogout?: () => void }) {
             <Button variant="ghost" size="icon" onClick={() => void load()} aria-label="Atualizar">
               <RefreshCw />
             </Button>
-            <Button variant="goldOutline" size="sm" onClick={() => (onLogout ? onLogout() : void supabase.auth.signOut())}>
+            <Button
+              variant="goldOutline"
+              size="sm"
+              onClick={() => (onLogout ? onLogout() : void supabase.auth.signOut())}
+            >
               <LogOut /> Sair
             </Button>
           </div>
@@ -458,115 +467,269 @@ function Dashboard({ onLogout }: { onLogout?: () => void }) {
 
       <main className="mx-auto max-w-[110rem] px-4 py-6 sm:px-6">
         {tab === "stock" ? (
-          /* ÁREA DE CONTROLE DE INGREDIENTES */
-          <div className="animate-rise space-y-6">
-            <div className="rounded-2xl border border-border/80 bg-secondary/20 p-5">
-              <h2 className="font-display text-xl font-bold text-foreground">
-                Controle de Disponibilidade de Ingredientes
-              </h2>
-              <p className="mt-1 text-sm text-muted-foreground">
-                Defina os ingredientes disponíveis e esgotados em tempo real. Quando marcado como{" "}
-                <strong>Esgotado</strong>, o cliente continua visualizando o item no cardápio mas é impedido de selecioná-lo.
-              </p>
-            </div>
-
-            <div className="grid gap-3 sm:grid-cols-2 md:grid-cols-3 lg:grid-cols-4">
-              {INGREDIENTS.map((item) => {
-                const isUnavailable = unavailableIngredients.includes(item.id);
-                return (
-                  <div
-                    key={item.id}
-                    className={`panel p-4 border transition-all ${
-                      isUnavailable ? "border-red-500/50 bg-red-950/10" : "border-border/80 bg-secondary/30"
-                    }`}
-                  >
-                    <div className="flex items-center justify-between gap-2">
-                      <div className="flex items-center gap-2.5">
-                        <span className="text-2xl">{item.emoji}</span>
-                        <div>
-                          <p className="font-display text-sm font-bold text-foreground">{item.id}</p>
-                          <p
-                            className={`text-xs font-semibold ${
-                              isUnavailable ? "text-red-400" : "text-emerald-400"
-                            }`}
-                          >
-                            {isUnavailable ? "⚠️ Esgotado" : "✓ Disponível"}
-                          </p>
-                        </div>
-                      </div>
-                    </div>
-
-                    <div className="mt-4 grid grid-cols-2 gap-2">
-                      <button
-                        type="button"
-                        onClick={() => toggleIngredientAvailability(item.id, true)}
-                        className={`rounded-lg py-1.5 text-xs font-bold transition-all ${
-                          isUnavailable
-                            ? "bg-red-600 text-white shadow"
-                            : "bg-secondary text-muted-foreground hover:bg-red-500/20 hover:text-red-400"
-                        }`}
-                      >
-                        [ Esgotado ]
-                      </button>
-                      <button
-                        type="button"
-                        onClick={() => toggleIngredientAvailability(item.id, false)}
-                        className={`rounded-lg py-1.5 text-xs font-bold transition-all ${
-                          !isUnavailable
-                            ? "bg-emerald-600 text-white shadow"
-                            : "bg-secondary text-muted-foreground hover:bg-emerald-500/20 hover:text-emerald-400"
-                        }`}
-                      >
-                        [ Disponível ]
-                      </button>
-                    </div>
-                  </div>
-                );
-              })}
-            </div>
-          </div>
-        ) : loading ? (
-          <div className="grid gap-4 md:grid-cols-3 xl:grid-cols-5">
-            {Array.from({ length: 5 }).map((_, i) => (
-              <Skeleton key={i} className="h-64 rounded-2xl" />
-            ))}
-          </div>
+          <StockManager
+            unavailable={unavailableIngredients}
+            onToggle={toggleIngredientAvailability}
+          />
         ) : (
-          <div className="grid gap-4 md:grid-cols-2 xl:grid-cols-5">
-            {STATUS_FLOW.map((column) => {
-              const columnOrders = orders.filter((o) => o.status === column.id);
-              const groups = groupOrders(columnOrders);
-              return (
-                <section key={column.id} className="flex flex-col gap-3">
-                  <div className="flex items-center justify-between rounded-xl border border-border bg-secondary/40 px-4 py-2.5">
-                    <span className="text-xs font-semibold tracking-[0.15em] text-foreground uppercase">
-                      {column.label}
-                    </span>
-                    <span className="rounded-full bg-gold/15 px-2 py-0.5 text-xs font-bold text-gold">
-                      {groups.length}
-                    </span>
-                  </div>
-                  <div className="space-y-3">
-                    {groups.map((group) => (
-                      <OrderCard
-                        key={group.map((o) => o.id).join("-")}
-                        orders={group}
-                        onAdvance={advance}
-                        onCancel={cancelOrder}
-                      />
-                    ))}
-                    {groups.length === 0 ? (
-                      <p className="rounded-xl border border-dashed border-border px-4 py-6 text-center text-xs text-muted-foreground">
-                        Nenhum pedido
-                      </p>
-                    ) : null}
-                  </div>
-                </section>
-              );
-            })}
-          </div>
+          <OrdersView
+            orders={orders}
+            loading={loading}
+            onAdvance={advance}
+            onCancel={cancelOrder}
+            groupOrders={groupOrders}
+          />
         )}
       </main>
+    </div>
+  );
+}
+
+function StockManager({
+  unavailable,
+  onToggle,
+}: {
+  unavailable: string[];
+  onToggle: (id: string, setUnavailable: boolean) => void;
+}) {
+  const [filter, setFilter] = useState("");
+
+  const groups: { title: string; items: { id: string; emoji?: string }[] }[] = [
+    { title: "Massas", items: PASTAS },
+    { title: "Molhos", items: SAUCES },
+    { title: "Ingredientes / Adicionais", items: INGREDIENTS },
+    { title: "Refogados", items: SAUTES },
+    { title: "Finalizações", items: FINISHINGS },
+  ];
+
+  return (
+    <div className="space-y-6">
+      <div className="flex flex-col gap-4 sm:flex-row sm:items-center sm:justify-between">
+        <div>
+          <h2 className="font-display text-xl font-bold text-foreground">Controle de Estoque</h2>
+          <p className="text-xs text-muted-foreground">
+            Marque ingredientes como esgotados. Eles serão bloqueados no cardápio e na montagem em tempo real.
+          </p>
+        </div>
+        <div className="relative w-full sm:w-72">
+          <Search className="absolute left-3 top-1/2 size-4 -translate-y-1/2 text-muted-foreground" />
+          <Input
+            placeholder="Buscar ingrediente..."
+            value={filter}
+            onChange={(e) => setFilter(e.target.value)}
+            className="pl-9 text-xs"
+          />
+        </div>
+      </div>
+
+      <div className="grid gap-6 md:grid-cols-2 lg:grid-cols-3">
+        {groups.map((grp) => {
+          const filteredItems = grp.items.filter((item: { id: string }) =>
+            item.id.toLowerCase().includes(filter.toLowerCase()),
+          );
+          if (filteredItems.length === 0) return null;
+
+          return (
+            <div key={grp.title} className="panel p-4">
+              <h3 className="mb-3 font-display text-sm font-bold text-gold uppercase tracking-wider">
+                {grp.title}
+              </h3>
+              <div className="divide-y divide-border/50">
+                {filteredItems.map((item: { id: string; emoji?: string }) => {
+                  const isEsgotado = unavailable.includes(item.id);
+                  return (
+                    <div
+                      key={item.id}
+                      className="flex items-center justify-between py-2.5 text-xs transition-colors"
+                    >
+                      <div className="flex items-center gap-2">
+                        {item.emoji && <span className="text-base">{item.emoji}</span>}
+                        <span className={isEsgotado ? "text-muted-foreground line-through" : "text-foreground font-medium"}>
+                          {item.id}
+                        </span>
+                      </div>
+                      <button
+                        type="button"
+                        onClick={() => onToggle(item.id, !isEsgotado)}
+                        className={`rounded-lg px-2.5 py-1 text-[11px] font-bold tracking-wider uppercase transition-all ${
+                          isEsgotado
+                            ? "border border-red-500/50 bg-red-500/10 text-red-400 hover:bg-red-500/20"
+                            : "border border-emerald-500/40 bg-emerald-500/10 text-emerald-400 hover:bg-emerald-500/20"
+                        }`}
+                      >
+                        {isEsgotado ? "[ Esgotado ]" : "[ Disponível ]"}
+                      </button>
+                    </div>
+                  );
+                })}
+              </div>
+            </div>
+          );
+        })}
+      </div>
+    </div>
+  );
+}
+
+function OrdersView({
+  orders,
+  loading,
+  onAdvance,
+  onCancel,
+  groupOrders,
+}: {
+  orders: AdminOrder[];
+  loading: boolean;
+  onAdvance: (orders: AdminOrder[], status: OrderStatus) => void;
+  onCancel: (orders: AdminOrder[]) => void;
+  groupOrders: (list: AdminOrder[]) => AdminOrder[][];
+}) {
+  const [filter, setFilter] = useState("");
+  const [typeFilter, setTypeFilter] = useState<"todos" | "retirada" | "entrega" | "local">("todos");
+
+  const filtered = useMemo(() => {
+    return orders.filter((o: AdminOrder) => {
+      if (typeFilter !== "todos" && o.order_type !== typeFilter) return false;
+      if (!filter) return true;
+      const q = filter.toLowerCase();
+      return (
+        o.customer_name.toLowerCase().includes(q) ||
+        String(o.order_number).includes(q) ||
+        (o.phone ?? "").includes(q)
+      );
+    });
+  }, [orders, filter, typeFilter]);
+
+  const groupsByStatus = useMemo(() => {
+    const map: Record<OrderStatus, AdminOrder[][]> = {
+      novo: [],
+      em_preparo: [],
+      pronto: [],
+      saiu_entrega: [],
+      concluido: [],
+    };
+    (Object.keys(map) as OrderStatus[]).forEach((st) => {
+      const items = filtered.filter((o: AdminOrder) => o.status === st);
+      map[st] = groupOrders(items);
+    });
+    return map;
+  }, [filtered, groupOrders]);
+
+  if (loading) {
+    return (
+      <div className="flex h-64 items-center justify-center">
+        <Loader2 className="size-6 animate-spin text-gold" />
+      </div>
+    );
+  }
+
+  return (
+    <div>
+      <div className="mb-6 flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between">
+        <div className="relative w-full sm:w-80">
+          <Search className="absolute left-3.5 top-1/2 size-4 -translate-y-1/2 text-muted-foreground" />
+          <Input
+            placeholder="Buscar por cliente, pedido ou telefone..."
+            value={filter}
+            onChange={(e) => setFilter(e.target.value)}
+            className="pl-10"
+          />
+        </div>
+
+        <div className="flex items-center gap-1 overflow-x-auto rounded-2xl border border-border/70 bg-card/60 p-1">
+          {(["todos", "entrega", "retirada", "local"] as const).map((t) => (
+            <button
+              key={t}
+              type="button"
+              onClick={() => setTypeFilter(t)}
+              className={`rounded-xl px-3 py-1.5 text-xs font-semibold capitalize transition-colors ${
+                typeFilter === t
+                  ? "bg-gold text-background shadow"
+                  : "text-muted-foreground hover:text-foreground"
+              }`}
+            >
+              {t === "todos" ? "Todos" : t === "local" ? "No local" : t}
+            </button>
+          ))}
+        </div>
+      </div>
+
+      <div className="grid grid-cols-1 gap-4 lg:grid-cols-4">
+        <Column
+          title="NOVOS PEDIDOS"
+          count={groupsByStatus.novo.length}
+          color="border-gold/40 text-gold"
+          groups={groupsByStatus.novo}
+          onAdvance={onAdvance}
+          onCancel={onCancel}
+        />
+        <Column
+          title="EM PREPARO"
+          count={groupsByStatus.em_preparo.length}
+          color="border-blue-400/40 text-blue-400"
+          groups={groupsByStatus.em_preparo}
+          onAdvance={onAdvance}
+          onCancel={onCancel}
+        />
+        <Column
+          title="PRONTOS"
+          count={groupsByStatus.pronto.length}
+          color="border-emerald-400/40 text-emerald-400"
+          groups={groupsByStatus.pronto}
+          onAdvance={onAdvance}
+          onCancel={onCancel}
+        />
+        <Column
+          title="SAIU / CONCLUÍDO"
+          count={groupsByStatus.saiu_entrega.length + groupsByStatus.concluido.length}
+          color="border-muted-foreground/40 text-muted-foreground"
+          groups={[...groupsByStatus.saiu_entrega, ...groupsByStatus.concluido]}
+          onAdvance={onAdvance}
+          onCancel={onCancel}
+        />
+      </div>
+    </div>
+  );
+}
+
+function Column({
+  title,
+  count,
+  color,
+  groups,
+  onAdvance,
+  onCancel,
+}: {
+  title: string;
+  count: number;
+  color: string;
+  groups: AdminOrder[][];
+  onAdvance: (orders: AdminOrder[], status: OrderStatus) => void;
+  onCancel: (orders: AdminOrder[]) => void;
+}) {
+  return (
+    <div className="flex flex-col gap-3">
+      <div className={`flex items-center justify-between rounded-2xl border bg-card/40 px-4 py-2.5 ${color}`}>
+        <span className="font-display text-xs font-bold tracking-wider">{title}</span>
+        <span className="rounded-full bg-background/80 px-2 py-0.5 text-xs font-bold">{count}</span>
+      </div>
+
+      <div className="flex flex-col gap-3">
+        {groups.length === 0 ? (
+          <div className="rounded-2xl border border-dashed border-border/60 p-8 text-center text-xs text-muted-foreground">
+            Nenhum pedido aqui
+          </div>
+        ) : (
+          groups.map((group) => (
+            <OrderCard
+              key={group.map((o) => o.id).join("-")}
+              orders={group}
+              onAdvance={onAdvance}
+              onCancel={onCancel}
+            />
+          ))
+        )}
+      </div>
     </div>
   );
 }

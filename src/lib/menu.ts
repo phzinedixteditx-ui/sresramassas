@@ -231,7 +231,7 @@ export const DESSERT_ITEMS: DessertItem[] = [
     id: "pave",
     name: "Pavê",
     price: 10.0,
-    image: "/images/pave.jpg",
+    image: "/images/PAVE.jpg",
     hasFlavors: true,
     flavors: ["Amendoim", "Coco", "Morango"],
   },

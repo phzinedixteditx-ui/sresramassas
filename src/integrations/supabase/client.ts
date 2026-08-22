@@ -26,6 +26,7 @@ function createSupabaseFetch(supabaseKey: string): typeof fetch {
   };
 }
 
+
 function createSupabaseClient() {
   const SUPABASE_URL =
     import.meta.env['VITE_SUPABASE_URL'] ||
@@ -58,3 +59,4 @@ export const supabase = new Proxy({} as ReturnType<typeof createSupabaseClient>,
     return Reflect.get(_supabase, prop, receiver);
   },
 });
+

@@ -48,7 +48,17 @@ export function OptionCard({
         {selected ? <Check className="size-3.5" /> : <Plus className="size-3.5" />}
       </span>
 
-      {emoji ? <span className={cn("text-2xl", compact && "text-3xl")}>{emoji}</span> : null}
+      {emoji ? (
+        emoji.startsWith("/") || emoji.startsWith("http") ? (
+          <img
+            src={emoji}
+            alt={title}
+            className={cn("size-8 object-contain", compact && "size-10")}
+          />
+        ) : (
+          <span className={cn("text-2xl", compact && "text-3xl")}>{emoji}</span>
+        )
+      ) : null}
       <span
         className={cn(
           "pr-8 font-semibold text-foreground",

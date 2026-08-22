@@ -140,7 +140,11 @@ function Cardapio() {
                       : "border-border bg-secondary/40 text-foreground"
                   }`}
                 >
-                  <span className="text-lg">{i.emoji}</span>
+                  {i.emoji.startsWith("/") ? (
+                    <img src={i.emoji} alt={i.id} className="size-5 object-contain" />
+                  ) : (
+                    <span className="text-lg">{i.emoji}</span>
+                  )}
                   <span className="text-sm font-medium">{i.id}</span>
                   {isUnavailable ? (
                     <span className="ml-auto rounded bg-red-600/80 px-1.5 py-0.5 text-[9px] font-bold text-white uppercase">

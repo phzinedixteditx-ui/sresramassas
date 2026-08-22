@@ -28,13 +28,14 @@ export const SAUCES = [
   { id: "Bolonhesa", desc: "Carne moída apurada no tomate" },
   { id: "Ao Sugo", desc: "Tomate fresco, alho e manjericão" },
   { id: "Misturado", desc: "Branco + bolonhesa na medida certa" },
+  { id: "Alho e Óleo", desc: "Clássico leve e aromático com alho dourado e azeite" },
 ];
 
 export const INGREDIENTS: { id: string; emoji: string }[] = [
   { id: "Tomate", emoji: "🍅" },
   { id: "Palmito", emoji: "🌱" },
   { id: "Milho", emoji: "🌽" },
-  { id: "Calabresa", emoji: "🌶️" },
+  { id: "Calabresa", emoji: "/images/calabresa.png" },
   { id: "Bacon", emoji: "🥓" },
   { id: "Presunto", emoji: "🍖" },
   { id: "Peito de peru", emoji: "🦃" },
@@ -179,7 +180,7 @@ export type DessertItem = {
   id: string;
   name: string;
   price: number;
-  image?: string;
+  image?: string; // Opcional (Patê e Pavê SEM imagem)
   hasFlavors?: boolean;
   flavors?: string[];
 };
@@ -240,9 +241,23 @@ export const DESSERT_ITEMS: DessertItem[] = [
 // --- FORMAS DE PAGAMENTO ---
 export type PaymentMethod = "pix" | "cartao_credito" | "cartao_debito" | "dinheiro";
 
-export const PAYMENT_METHODS: { id: PaymentMethod; label: string; group: string; iconEmoji: string }[] = [
+export const CREDIT_CARD_FEE = 1.0;
+
+export const PAYMENT_METHODS: {
+  id: PaymentMethod;
+  label: string;
+  group: string;
+  iconEmoji: string;
+  feeNotice?: string;
+}[] = [
   { id: "pix", label: "Pix", group: "Pix", iconEmoji: "⚡" },
-  { id: "cartao_credito", label: "Cartão — Crédito", group: "Cartão", iconEmoji: "💳" },
+  {
+    id: "cartao_credito",
+    label: "Cartão — Crédito",
+    group: "Cartão",
+    iconEmoji: "💳",
+    feeNotice: "(+ R$ 1,00 taxa da maquininha)",
+  },
   { id: "cartao_debito", label: "Cartão — Débito", group: "Cartão", iconEmoji: "💳" },
   { id: "dinheiro", label: "Dinheiro", group: "Dinheiro", iconEmoji: "💵" },
 ];

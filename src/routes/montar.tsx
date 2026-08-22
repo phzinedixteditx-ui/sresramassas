@@ -15,6 +15,7 @@ import { supabase } from "@/integrations/supabase/client";
 import {
   BEVERAGE_CATEGORIES,
   brl,
+  CREDIT_CARD_FEE,
   DESSERT_ITEMS,
   FINISHINGS,
   INGREDIENTS,
@@ -182,9 +183,10 @@ function Montar() {
   }, [dessertCounts]);
 
   const deliveryFee = customer.orderType === "entrega" ? 7 : 0;
+  const creditCardFee = paymentMethod === "cartao_credito" ? CREDIT_CARD_FEE : 0;
   const isBuildingItem = size !== null;
   const finalTotal =
-    cartTotal + (isBuildingItem ? currentTotal : 0) + beveragesTotal + dessertsTotal + deliveryFee;
+    cartTotal + (isBuildingItem ? currentTotal : 0) + beveragesTotal + dessertsTotal + deliveryFee + creditCardFee;
 
   const canAdvance = useMemo(() => {
     switch (step) {
@@ -490,6 +492,7 @@ function Montar() {
       ``,
       `*💳 FORMA DE PAGAMENTO*`,
       `${paymentLabel}`,
+      paymentMethod === "cartao_credito" ? `• Taxa maquininha (Crédito): ${brl(CREDIT_CARD_FEE)}` : null,
       ``,
       customer.orderType === "entrega" ? `*🛵 Taxa de entrega:* ${brl(7)}` : null,
       `*💰 TOTAL DO PEDIDO: ${brl(finalTotal)}*`,
@@ -1041,7 +1044,7 @@ function Montar() {
                         key={pm.id}
                         type="button"
                         onClick={() => setPaymentMethod(pm.id)}
-                        className={`flex flex-col items-center justify-center gap-1.5 rounded-xl border p-3 text-center transition-all ${
+                        className={`flex flex-col items-center justify-center gap-1 rounded-xl border p-3 text-center transition-all ${
                           paymentMethod === pm.id
                             ? "border-gold bg-gold/20 text-gold shadow-md"
                             : "border-border/80 bg-secondary/40 text-foreground hover:border-gold/40"
@@ -1049,6 +1052,11 @@ function Montar() {
                       >
                         <span className="text-xl">{pm.iconEmoji}</span>
                         <span className="text-xs font-bold">{pm.label}</span>
+                        {pm.feeNotice && (
+                          <span className="text-[10px] font-semibold text-gold/90">
+                            {pm.feeNotice}
+                          </span>
+                        )}
                       </button>
                     ))}
                   </div>
@@ -1210,6 +1218,13 @@ function Montar() {
                       PAYMENT_METHODS.find((p) => p.id === paymentMethod)?.label ?? "Não informada"
                     }
                   />
+                  {paymentMethod === "cartao_credito" && (
+                    <SummaryRow
+                      label="Taxa da Maquininha (Crédito)"
+                      value="Crédito"
+                      extra={brl(CREDIT_CARD_FEE)}
+                    />
+                  )}
                   {customer.orderType === "entrega" && (
                     <SummaryRow label="Taxa de Entrega" value="Fixo" extra={brl(7)} />
                   )}

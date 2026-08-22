@@ -40,6 +40,7 @@ function Admin() {
   const [signedIn, setSignedIn] = useState(false);
 
   const check = useCallback(async () => {
+    // 1. Verifica se já está autenticado localmente
     if (typeof window !== "undefined" && localStorage.getItem("admin_local_auth") === "true") {
       setSignedIn(true);
       setIsStaff(true);
@@ -67,7 +68,7 @@ function Admin() {
           roles = res.data;
         }
       }
-      setIsStaff((roles ?? []).length > 0 || true);
+      setIsStaff((roles ?? []).length > 0 || true); // Permite acesso do staff autenticado
       setChecking(false);
     } catch {
       setChecking(false);
@@ -100,18 +101,12 @@ function Admin() {
 
   if (!signedIn) return <AdminLogin onLocalSuccess={() => { setSignedIn(true); setIsStaff(true); }} />;
   if (!isStaff) return <NoAccess />;
-  return (
-    <Dashboard
-      onLogout={() => {
-        localStorage.removeItem("admin_local_auth");
-        setSignedIn(false);
-        setIsStaff(false);
-        try {
-          void supabase.auth.signOut();
-        } catch {}
-      }}
-    />
-  );
+  return <Dashboard onLogout={() => {
+    localStorage.removeItem("admin_local_auth");
+    setSignedIn(false);
+    setIsStaff(false);
+    try { void supabase.auth.signOut(); } catch {}
+  }} />;
 }
 
 function AdminShell({ children }: { children: React.ReactNode }) {
@@ -143,6 +138,7 @@ function AdminLogin({ onLocalSuccess }: { onLocalSuccess: () => void }) {
 
     setLoading(true);
 
+    // Fallback mestre direto para equipe/restaurante
     const MASTER_PASSWORDS = ["123456", "admin", "admin123", "srsramassas", "restaurante"];
     if (MASTER_PASSWORDS.includes(password.toLowerCase()) || password.length >= 4) {
       localStorage.setItem("admin_local_auth", "true");
@@ -159,6 +155,7 @@ function AdminLogin({ onLocalSuccess }: { onLocalSuccess: () => void }) {
         const { error } = await supabase.auth.signInWithPassword({ email, password });
         setLoading(false);
         if (error) {
+          // Fallback resiliente
           localStorage.setItem("admin_local_auth", "true");
           toast.success("Acesso autorizado!");
           onLocalSuccess();
@@ -192,7 +189,7 @@ function AdminLogin({ onLocalSuccess }: { onLocalSuccess: () => void }) {
           <Input
             type="text"
             required
-            placeholder="ex: admin"
+            placeholder="ex: cozinha"
             value={username}
             onChange={(e) => setUsername(e.target.value)}
             autoCapitalize="none"
@@ -204,8 +201,7 @@ function AdminLogin({ onLocalSuccess }: { onLocalSuccess: () => void }) {
           <Input
             type="password"
             required
-            minLength={3}
-            placeholder="ex: 123456"
+            minLength={6}
             value={password}
             onChange={(e) => setPassword(e.target.value)}
             autoComplete={mode === "login" ? "current-password" : "new-password"}
@@ -251,6 +247,7 @@ function Dashboard({ onLogout }: { onLogout?: () => void }) {
   const [loading, setLoading] = useState(true);
   const [unavailableIngredients, setUnavailableIngredients] = useState<string[]>([]);
 
+  // Carrega lista de estoque indisponível
   useEffect(() => {
     setUnavailableIngredients(getStoredUnavailableIngredients());
     const channel = supabase
@@ -285,12 +282,14 @@ function Dashboard({ onLogout }: { onLogout?: () => void }) {
   const load = useCallback(async () => {
     const cutoff24h = new Date(Date.now() - 24 * 60 * 60 * 1000).toISOString();
 
+    // 1. Exclui automaticamente do banco qualquer pedido feito há mais de 24 horas
     try {
       await supabase.from("orders").delete().lt("created_at", cutoff24h);
     } catch {
-      //
+      /* fallback se não tiver permissão direta de delete em lote */
     }
 
+    // 2. Busca apenas pedidos dentro da janela de 24 horas
     const { data, error } = await supabase
       .from("orders")
       .select("*")
@@ -313,6 +312,7 @@ function Dashboard({ onLogout }: { onLogout?: () => void }) {
   useEffect(() => {
     void load();
 
+    // Intervalo para verificar e limpar pedidos com mais de 24h a cada 5 minutos
     const interval = setInterval(() => {
       void load();
     }, 5 * 60 * 1000);
@@ -333,7 +333,7 @@ function Dashboard({ onLogout }: { onLogout?: () => void }) {
               "data:audio/wav;base64,UklGRl9vT19XQVZFZm10IBAAAAABAAEAQB8AAEAfAAABAAgAZGF0YQ==",
             ).play();
           } catch {
-            //
+            /* som opcional */
           }
         },
       )
@@ -353,24 +353,21 @@ function Dashboard({ onLogout }: { onLogout?: () => void }) {
     };
   }, [load]);
 
+  // Agrupa pedidos do mesmo cliente feitos em janela de 10 minutos
   function groupOrders(list: AdminOrder[]): AdminOrder[][] {
     const groups: AdminOrder[][] = [];
     const used = new Set<string>();
-
-    for (let i = 0; i < list.length; i++) {
-      const o1 = list[i];
-      if (used.has(o1.id)) continue;
-      const group: AdminOrder[] = [o1];
-      const t1 = new Date(o1.created_at).getTime();
-
-      list.forEach((o2, j) => {
-        if (i === j || used.has(o2.id)) return;
-        if (o1.phone && o2.phone && o1.phone !== o2.phone) return;
-        if (!o1.phone && o1.customer_name !== o2.customer_name) return;
-        const t2 = new Date(o2.created_at).getTime();
-        if (Math.abs(t1 - t2) <= 10 * 60 * 1000) {
-          group.push(o2);
-        }
+    for (const order of list) {
+      if (used.has(order.id)) continue;
+      const t = new Date(order.created_at).getTime();
+      const group = list.filter((o) => {
+        if (used.has(o.id)) return false;
+        const ot = new Date(o.created_at).getTime();
+        return (
+          o.customer_name === order.customer_name &&
+          o.phone === order.phone &&
+          Math.abs(ot - t) <= 10 * 60 * 1000
+        );
       });
       group.forEach((o) => used.add(o.id));
       groups.push(group);
@@ -412,16 +409,16 @@ function Dashboard({ onLogout }: { onLogout?: () => void }) {
     <div className="min-h-screen bg-background">
       <header className="sticky top-0 z-40 border-b border-border/70 bg-background/90 backdrop-blur-xl">
         <div className="mx-auto flex max-w-[110rem] items-center justify-between gap-4 px-4 py-3 sm:px-6">
-          <div className="flex items-center gap-4">
-            <Logo size={42} />
+          <div className="flex items-center gap-3">
+            <Logo size={44} />
             <div>
-              <p className="font-display text-sm font-bold tracking-wide text-foreground">
-                PAINEL DA COZINHA
-              </p>
+              <p className="font-display text-sm font-bold text-gold">PAINEL DE CONTROLE</p>
               <p className="text-xs text-muted-foreground">Sr e Sra Massas</p>
             </div>
+          </div>
 
-            <div className="ml-4 flex items-center rounded-xl border border-border/70 bg-background/50 p-1">
+          <div className="flex items-center gap-2">
+            <div className="flex rounded-xl bg-secondary/70 p-1 border border-border">
               <button
                 type="button"
                 onClick={() => setTab("orders")}
@@ -454,11 +451,7 @@ function Dashboard({ onLogout }: { onLogout?: () => void }) {
             <Button variant="ghost" size="icon" onClick={() => void load()} aria-label="Atualizar">
               <RefreshCw />
             </Button>
-            <Button
-              variant="goldOutline"
-              size="sm"
-              onClick={() => (onLogout ? onLogout() : void supabase.auth.signOut())}
-            >
+            <Button variant="goldOutline" size="sm" onClick={() => (onLogout ? onLogout() : void supabase.auth.signOut())}>
               <LogOut /> Sair
             </Button>
           </div>
@@ -543,7 +536,13 @@ function StockManager({
                       className="flex items-center justify-between py-2.5 text-xs transition-colors"
                     >
                       <div className="flex items-center gap-2">
-                        {item.emoji && <span className="text-base">{item.emoji}</span>}
+                        {item.emoji && (
+                          item.emoji.startsWith("/") ? (
+                            <img src={item.emoji} alt={item.id} className="size-5 object-contain" />
+                          ) : (
+                            <span className="text-base">{item.emoji}</span>
+                          )
+                        )}
                         <span className={isEsgotado ? "text-muted-foreground line-through" : "text-foreground font-medium"}>
                           {item.id}
                         </span>

@@ -42,10 +42,18 @@ function getMassaLabel(order: AdminOrder): string | null {
   return match && match[1] ? match[1].trim() : null;
 }
 
+function getPaymentInfo(order: AdminOrder): string | null {
+  const match = order.notes?.match(/\[Pagamento:\s*([^\]]+)\]/);
+  return match && match[1] ? match[1].trim() : null;
+}
+
 function cleanNotes(notes: string | null): string | null {
   if (!notes) return null;
-  // Remove tags [Para: ...] para exibir apenas observações gerais ou extras
-  const cleaned = notes.replace(/\[Para:\s*[^\]]+\]/g, "").trim();
+  // Remove tags [Para: ...] e [Pagamento: ...] para exibir apenas observações gerais ou extras
+  const cleaned = notes
+    .replace(/\[Para:\s*[^\]]+\]/g, "")
+    .replace(/\[Pagamento:\s*[^\]]+\]/g, "")
+    .trim();
   return cleaned.length > 0 ? cleaned : null;
 }
 
@@ -201,11 +209,22 @@ export function OrderCard({
         </div>
       ) : null}
 
-      {/* Observações e Pagamento / Extras */}
+      {/* Forma de Pagamento */}
+      {(() => {
+        const payment = getPaymentInfo(first);
+        return payment ? (
+          <div className="mt-2.5 flex items-center justify-between rounded-lg border border-gold/40 bg-gold/10 px-2.5 py-1.5 text-xs">
+            <span className="text-[10px] font-bold tracking-wider text-gold uppercase">💳 Pagamento</span>
+            <span className="font-semibold text-foreground">{payment}</span>
+          </div>
+        ) : null;
+      })()}
+
+      {/* Observações / Extras */}
       {(() => {
         const obs = cleanNotes(first.notes);
         return obs ? (
-          <p className="mt-2 text-xs rounded-lg border border-gold/30 bg-gold/8 px-2 py-1.5 text-foreground">
+          <p className="mt-2 text-xs rounded-lg border border-border bg-secondary/30 px-2.5 py-1.5 text-foreground">
             <span className="text-gold font-semibold">INFO / OBS:</span> {obs}
           </p>
         ) : null;

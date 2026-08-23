@@ -396,7 +396,12 @@ function Montar() {
       if (!item) continue;
       const extraNotesParts: string[] = [];
       extraNotesParts.push(`[Para: ${item.massaLabel}]`);
-      if (paymentMethod) extraNotesParts.push(`[Pagamento: ${paymentLabel}]`);
+      if (paymentMethod) {
+        const isCredit = paymentMethod === "cartao_credito";
+        extraNotesParts.push(
+          `[Pagamento: ${paymentLabel}${isCredit ? " (+ R$ 1,00 taxa da maquininha)" : ""}]`,
+        );
+      }
       if (i === 0) {
         if (beverageList.length > 0) {
           extraNotesParts.push(

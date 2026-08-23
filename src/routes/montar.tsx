@@ -31,7 +31,7 @@ import {
   type SizeId,
   whatsappLink,
 } from "@/lib/menu";
-import { getStoredUnavailableIngredients } from "@/lib/stock";
+import { fetchUnavailableIngredients, getStoredUnavailableIngredients } from "@/lib/stock";
 
 export const Route = createFileRoute("/montar")({
   ssr: false,
@@ -132,8 +132,25 @@ function Montar() {
   // Carrega e escuta estoque em tempo real
   useEffect(() => {
     setUnavailableIngredients(getStoredUnavailableIngredients());
+    void fetchUnavailableIngredients().then((list) => {
+      setUnavailableIngredients(list);
+    });
+
     const channel = supabase
-      .channel("stock-events-montar")
+      .channel("stock-realtime-montar")
+      .on(
+        "postgres_changes",
+        { event: "*", schema: "public", table: "stock_settings" },
+        (payload) => {
+          const row = payload.new as { unavailable_items?: string[] } | undefined;
+          if (row?.unavailable_items) {
+            setUnavailableIngredients(row.unavailable_items);
+            if (typeof window !== "undefined") {
+              localStorage.setItem("sresramassas_unavailable_ingredients", JSON.stringify(row.unavailable_items));
+            }
+          }
+        },
+      )
       .on("broadcast", { event: "stock_update" }, (payload: { [key: string]: unknown }) => {
         const payloadData = payload["payload"] as { unavailable?: string[] } | undefined;
         if (payloadData?.unavailable) {

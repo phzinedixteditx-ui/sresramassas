@@ -18,7 +18,11 @@ import {
   SAUTES,
   type OrderStatus,
 } from "@/lib/menu";
-import { getStoredUnavailableIngredients, saveUnavailableIngredients } from "@/lib/stock";
+import {
+  fetchUnavailableIngredients,
+  getStoredUnavailableIngredients,
+  saveUnavailableIngredients,
+} from "@/lib/stock";
 
 export const Route = createFileRoute("/admin")({
   ssr: false,
@@ -250,8 +254,25 @@ function Dashboard({ onLogout }: { onLogout?: () => void }) {
   // Carrega lista de estoque indisponível
   useEffect(() => {
     setUnavailableIngredients(getStoredUnavailableIngredients());
+    void fetchUnavailableIngredients().then((list) => {
+      setUnavailableIngredients(list);
+    });
+
     const channel = supabase
-      .channel("stock-events-admin")
+      .channel("stock-realtime-admin")
+      .on(
+        "postgres_changes",
+        { event: "*", schema: "public", table: "stock_settings" },
+        (payload) => {
+          const row = payload.new as { unavailable_items?: string[] } | undefined;
+          if (row?.unavailable_items) {
+            setUnavailableIngredients(row.unavailable_items);
+            if (typeof window !== "undefined") {
+              localStorage.setItem("sresramassas_unavailable_ingredients", JSON.stringify(row.unavailable_items));
+            }
+          }
+        },
+      )
       .on("broadcast", { event: "stock_update" }, (payload: { [key: string]: unknown }) => {
         const data = payload["payload"] as { unavailable?: string[] } | undefined;
         if (data?.unavailable) {

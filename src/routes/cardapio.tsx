@@ -234,14 +234,29 @@ function Cardapio() {
                     ) : null}
                   </div>
                   <div className="mt-2 flex flex-wrap gap-2">
-                    {cat.items.map((item) => (
-                      <span
-                        key={item.id}
-                        className="rounded-lg bg-secondary/80 border border-border px-2.5 py-1 text-xs text-foreground"
-                      >
-                        {item.name} {cat.items.length > 1 && `(${brl(item.price)})`}
-                      </span>
-                    ))}
+                    {cat.items.map((item) => {
+                      const isUnavailable =
+                        unavailableIngredients.includes(item.id) ||
+                        unavailableIngredients.includes(item.name) ||
+                        unavailableIngredients.includes(`${cat.name} — ${item.name}`);
+                      return (
+                        <span
+                          key={item.id}
+                          className={`rounded-lg border px-2.5 py-1 text-xs transition-colors ${
+                            isUnavailable
+                              ? "border-red-500/40 bg-red-950/20 text-muted-foreground line-through"
+                              : "border-border bg-secondary/80 text-foreground"
+                          }`}
+                        >
+                          {item.name} {cat.items.length > 1 && `(${brl(item.price)})`}
+                          {isUnavailable && (
+                            <span className="ml-1 text-[10px] text-red-400 no-underline font-bold">
+                              (Esgotado)
+                            </span>
+                          )}
+                        </span>
+                      );
+                    })}
                   </div>
                 </div>
               </div>
@@ -252,32 +267,95 @@ function Cardapio() {
         {/* SEÇÃO 9: DOCES */}
         <Section index="9" title="Doces & Sobremesas">
           <div className="grid gap-3 sm:grid-cols-2 md:grid-cols-3">
-            {DESSERT_ITEMS.map((item) => (
-              <div
-                key={item.id}
-                className="flex items-center gap-3 rounded-2xl border border-border bg-secondary/30 p-3.5"
-              >
-                {item.image ? (
-                  <div className="size-14 overflow-hidden rounded-xl bg-muted shrink-0">
-                    <img
-                      src={item.image}
-                      alt={item.name}
-                      className="h-full w-full object-cover"
-                      loading="lazy"
-                    />
+            {DESSERT_ITEMS.map((item) => {
+              if (item.hasFlavors && item.flavors) {
+                return (
+                  <div
+                    key={item.id}
+                    className="flex items-center gap-3 rounded-2xl border border-border bg-secondary/30 p-3.5"
+                  >
+                    {item.image ? (
+                      <div className="size-14 overflow-hidden rounded-xl bg-muted shrink-0">
+                        <img
+                          src={item.image}
+                          alt={item.name}
+                          className="h-full w-full object-cover"
+                          loading="lazy"
+                        />
+                      </div>
+                    ) : null}
+                    <div className="flex-1 min-w-0">
+                      <h3 className="font-display text-sm font-bold text-foreground">
+                        {item.name}
+                      </h3>
+                      <p className="text-xs font-semibold text-gold">{brl(item.price)}</p>
+                      <div className="mt-1.5 flex flex-wrap gap-1.5">
+                        {item.flavors.map((f) => {
+                          const key = `${item.id}_${f}`;
+                          const isUnavailable =
+                            unavailableIngredients.includes(key) ||
+                            unavailableIngredients.includes(`${item.name} — ${f}`);
+                          return (
+                            <span
+                              key={f}
+                              className={`rounded-md border px-2 py-0.5 text-[11px] ${
+                                isUnavailable
+                                  ? "border-red-500/40 bg-red-950/20 text-muted-foreground line-through"
+                                  : "border-border/60 bg-secondary/50 text-foreground"
+                              }`}
+                            >
+                              {f} {isUnavailable && "(Esgotado)"}
+                            </span>
+                          );
+                        })}
+                      </div>
+                    </div>
                   </div>
-                ) : null}
-                <div>
-                  <h3 className="font-display text-sm font-bold text-foreground">{item.name}</h3>
-                  <p className="text-xs font-semibold text-gold">{brl(item.price)}</p>
-                  {item.flavors ? (
-                    <p className="text-[11px] text-muted-foreground mt-0.5">
-                      {item.flavors.join(", ")}
-                    </p>
+                );
+              }
+
+              const isUnavailable =
+                unavailableIngredients.includes(item.id) ||
+                unavailableIngredients.includes(item.name);
+              return (
+                <div
+                  key={item.id}
+                  className={`flex items-center gap-3 rounded-2xl border p-3.5 transition-colors ${
+                    isUnavailable
+                      ? "border-red-500/30 bg-red-950/20 opacity-70"
+                      : "border-border bg-secondary/30"
+                  }`}
+                >
+                  {item.image ? (
+                    <div className="size-14 overflow-hidden rounded-xl bg-muted shrink-0">
+                      <img
+                        src={item.image}
+                        alt={item.name}
+                        className="h-full w-full object-cover"
+                        loading="lazy"
+                      />
+                    </div>
                   ) : null}
+                  <div className="flex-1 min-w-0">
+                    <div className="flex items-center justify-between">
+                      <h3
+                        className={`font-display text-sm font-bold ${
+                          isUnavailable ? "line-through text-muted-foreground" : "text-foreground"
+                        }`}
+                      >
+                        {item.name}
+                      </h3>
+                      {isUnavailable ? (
+                        <span className="rounded bg-red-600/80 px-1.5 py-0.5 text-[9px] font-bold text-white uppercase">
+                          Esgotado
+                        </span>
+                      ) : null}
+                    </div>
+                    <p className="text-xs font-semibold text-gold">{brl(item.price)}</p>
+                  </div>
                 </div>
-              </div>
-            ))}
+              );
+            })}
           </div>
         </Section>
 

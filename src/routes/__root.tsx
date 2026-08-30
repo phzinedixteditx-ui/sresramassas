@@ -84,6 +84,7 @@ export const Route = createRootRouteWithContext<{ queryClient: QueryClient }>()(
         content:
           "Monte sua massa artesanal escolhendo massa, molho, ingredientes e finalização. Peça online no Sr e Sra Massas.",
       },
+      { name: "google", content: "notranslate" },
       { name: "author", content: "Sr e Sra Massas" },
       { property: "og:title", content: "Sr e Sra Massas — Monte sua massa do seu jeito" },
       {
@@ -116,11 +117,11 @@ export const Route = createRootRouteWithContext<{ queryClient: QueryClient }>()(
 
 function RootShell({ children }: { children: ReactNode }) {
   return (
-    <html lang="en">
+    <html lang="pt-BR" translate="no" className="notranslate">
       <head>
         <HeadContent />
       </head>
-      <body>
+      <body className="notranslate" translate="no">
         {children}
         <Scripts />
       </body>

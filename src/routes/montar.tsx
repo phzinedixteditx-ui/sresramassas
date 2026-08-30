@@ -263,6 +263,12 @@ function Montar() {
   }
 
   function updateBeverageCount(itemId: string, delta: number) {
+    if (delta > 0 && unavailableIngredients.includes(itemId)) {
+      toast.error("⚠️ Bebida esgotada", {
+        description: "Esta bebida está temporariamente indisponível.",
+      });
+      return;
+    }
     setBeverageCounts((prev) => {
       const current = prev[itemId] || 0;
       const nextVal = Math.max(0, current + delta);
@@ -276,6 +282,12 @@ function Montar() {
   }
 
   function updateDessertCount(key: string, delta: number) {
+    if (delta > 0 && unavailableIngredients.includes(key)) {
+      toast.error("⚠️ Doce esgotado", {
+        description: "Este doce está temporariamente indisponível.",
+      });
+      return;
+    }
     setDessertCounts((prev) => {
       const current = prev[key] || 0;
       const nextVal = Math.max(0, current + delta);
@@ -757,44 +769,62 @@ function Montar() {
                         <div className="mt-3 grid gap-2.5 sm:grid-cols-2">
                           {cat.items.map((item) => {
                             const count = beverageCounts[item.id] || 0;
+                            const isUnavailable =
+                              unavailableIngredients.includes(item.id) ||
+                              unavailableIngredients.includes(item.name) ||
+                              unavailableIngredients.includes(`${cat.name} — ${item.name}`);
                             return (
                               <div
                                 key={item.id}
                                 className={`flex items-center justify-between rounded-xl border p-2.5 transition-colors ${
-                                  count > 0
-                                    ? "border-gold/60 bg-gold/10"
-                                    : "border-border/60 bg-secondary/30"
+                                  isUnavailable
+                                    ? "border-red-500/30 bg-red-950/20 opacity-60"
+                                    : count > 0
+                                      ? "border-gold/60 bg-gold/10"
+                                      : "border-border/60 bg-secondary/30"
                                 }`}
                               >
                                 <div>
-                                  <p className="text-xs font-semibold text-foreground">
+                                  <p
+                                    className={`text-xs font-semibold ${
+                                      isUnavailable
+                                        ? "line-through text-muted-foreground"
+                                        : "text-foreground"
+                                    }`}
+                                  >
                                     {item.name}
                                   </p>
                                   <p className="text-[11px] text-gold">{brl(item.price)}</p>
                                 </div>
-                                <div className="flex items-center gap-2">
-                                  {count > 0 ? (
-                                    <>
-                                      <button
-                                        type="button"
-                                        onClick={() => updateBeverageCount(item.id, -1)}
-                                        className="flex size-7 items-center justify-center rounded-lg bg-secondary text-foreground hover:bg-gold/20"
-                                      >
-                                        <Minus className="size-3.5" />
-                                      </button>
-                                      <span className="w-5 text-center font-display text-sm font-bold text-gold">
-                                        {count}
-                                      </span>
-                                    </>
-                                  ) : null}
-                                  <button
-                                    type="button"
-                                    onClick={() => updateBeverageCount(item.id, 1)}
-                                    className="flex size-7 items-center justify-center rounded-lg bg-gold text-background font-bold hover:bg-gold/90 transition-transform active:scale-95"
-                                  >
-                                    <Plus className="size-3.5" />
-                                  </button>
-                                </div>
+                                {isUnavailable ? (
+                                  <span className="rounded-full bg-red-600/90 px-2 py-0.5 text-[9px] font-bold text-white shadow">
+                                    Esgotado
+                                  </span>
+                                ) : (
+                                  <div className="flex items-center gap-2">
+                                    {count > 0 ? (
+                                      <>
+                                        <button
+                                          type="button"
+                                          onClick={() => updateBeverageCount(item.id, -1)}
+                                          className="flex size-7 items-center justify-center rounded-lg bg-secondary text-foreground hover:bg-gold/20"
+                                        >
+                                          <Minus className="size-3.5" />
+                                        </button>
+                                        <span className="w-5 text-center font-display text-sm font-bold text-gold">
+                                          {count}
+                                        </span>
+                                      </>
+                                    ) : null}
+                                    <button
+                                      type="button"
+                                      onClick={() => updateBeverageCount(item.id, 1)}
+                                      className="flex size-7 items-center justify-center rounded-lg bg-gold text-background font-bold hover:bg-gold/90 transition-transform active:scale-95"
+                                    >
+                                      <Plus className="size-3.5" />
+                                    </button>
+                                  </div>
+                                )}
                               </div>
                             );
                           })}
@@ -852,44 +882,61 @@ function Montar() {
                               {item.flavors.map((flavor) => {
                                 const key = `${item.id}_${flavor}`;
                                 const count = dessertCounts[key] || 0;
+                                const isUnavailable =
+                                  unavailableIngredients.includes(key) ||
+                                  unavailableIngredients.includes(`${item.name} — ${flavor}`);
                                 return (
                                   <div
                                     key={flavor}
                                     className={`flex items-center justify-between rounded-xl border p-2.5 transition-colors ${
-                                      count > 0
-                                        ? "border-gold/60 bg-gold/10"
-                                        : "border-border/60 bg-secondary/30"
+                                      isUnavailable
+                                        ? "border-red-500/30 bg-red-950/20 opacity-60"
+                                        : count > 0
+                                          ? "border-gold/60 bg-gold/10"
+                                          : "border-border/60 bg-secondary/30"
                                     }`}
                                   >
                                     <div>
-                                      <p className="text-xs font-semibold text-foreground">
+                                      <p
+                                        className={`text-xs font-semibold ${
+                                          isUnavailable
+                                            ? "line-through text-muted-foreground"
+                                            : "text-foreground"
+                                        }`}
+                                      >
                                         {flavor}
                                       </p>
                                       <p className="text-[11px] text-gold">{brl(item.price)}</p>
                                     </div>
-                                    <div className="flex items-center gap-2">
-                                      {count > 0 ? (
-                                        <>
-                                          <button
-                                            type="button"
-                                            onClick={() => updateDessertCount(key, -1)}
-                                            className="flex size-7 items-center justify-center rounded-lg bg-secondary text-foreground hover:bg-gold/20"
-                                          >
-                                            <Minus className="size-3.5" />
-                                          </button>
-                                          <span className="w-5 text-center font-display text-sm font-bold text-gold">
-                                            {count}
-                                          </span>
-                                        </>
-                                      ) : null}
-                                      <button
-                                        type="button"
-                                        onClick={() => updateDessertCount(key, 1)}
-                                        className="flex size-7 items-center justify-center rounded-lg bg-gold text-background font-bold hover:bg-gold/90 transition-transform active:scale-95"
-                                      >
-                                        <Plus className="size-3.5" />
-                                      </button>
-                                    </div>
+                                    {isUnavailable ? (
+                                      <span className="rounded-full bg-red-600/90 px-2 py-0.5 text-[9px] font-bold text-white shadow">
+                                        Esgotado
+                                      </span>
+                                    ) : (
+                                      <div className="flex items-center gap-2">
+                                        {count > 0 ? (
+                                          <>
+                                            <button
+                                              type="button"
+                                              onClick={() => updateDessertCount(key, -1)}
+                                              className="flex size-7 items-center justify-center rounded-lg bg-secondary text-foreground hover:bg-gold/20"
+                                            >
+                                              <Minus className="size-3.5" />
+                                            </button>
+                                            <span className="w-5 text-center font-display text-sm font-bold text-gold">
+                                              {count}
+                                            </span>
+                                          </>
+                                        ) : null}
+                                        <button
+                                          type="button"
+                                          onClick={() => updateDessertCount(key, 1)}
+                                          className="flex size-7 items-center justify-center rounded-lg bg-gold text-background font-bold hover:bg-gold/90 transition-transform active:scale-95"
+                                        >
+                                          <Plus className="size-3.5" />
+                                        </button>
+                                      </div>
+                                    )}
                                   </div>
                                 );
                               })}
@@ -901,11 +948,18 @@ function Montar() {
                   }
 
                   const count = dessertCounts[item.id] || 0;
+                  const isUnavailable =
+                    unavailableIngredients.includes(item.id) ||
+                    unavailableIngredients.includes(item.name);
                   return (
                     <div
                       key={item.id}
                       className={`panel flex items-center gap-3.5 p-3.5 border transition-all ${
-                        count > 0 ? "border-gold/60 bg-gold/5" : "border-border/70"
+                        isUnavailable
+                          ? "border-red-500/30 bg-red-950/20 opacity-60"
+                          : count > 0
+                            ? "border-gold/60 bg-gold/5"
+                            : "border-border/70"
                       }`}
                     >
                       {item.image ? (
@@ -919,34 +973,44 @@ function Montar() {
                         </div>
                       ) : null}
                       <div className="flex-1">
-                        <h4 className="font-display text-sm font-bold text-foreground">
+                        <h4
+                          className={`font-display text-sm font-bold ${
+                            isUnavailable ? "line-through text-muted-foreground" : "text-foreground"
+                          }`}
+                        >
                           {item.name}
                         </h4>
                         <p className="text-xs font-semibold text-gold">{brl(item.price)}</p>
                       </div>
-                      <div className="flex items-center gap-2">
-                        {count > 0 ? (
-                          <>
-                            <button
-                              type="button"
-                              onClick={() => updateDessertCount(item.id, -1)}
-                              className="flex size-7 items-center justify-center rounded-lg bg-secondary text-foreground hover:bg-gold/20"
-                            >
-                              <Minus className="size-3.5" />
-                            </button>
-                            <span className="w-5 text-center font-display text-sm font-bold text-gold">
-                              {count}
-                            </span>
-                          </>
-                        ) : null}
-                        <button
-                          type="button"
-                          onClick={() => updateDessertCount(item.id, 1)}
-                          className="flex size-7 items-center justify-center rounded-lg bg-gold text-background font-bold hover:bg-gold/90 transition-transform active:scale-95"
-                        >
-                          <Plus className="size-3.5" />
-                        </button>
-                      </div>
+                      {isUnavailable ? (
+                        <span className="rounded-full bg-red-600/90 px-2 py-0.5 text-[9px] font-bold text-white shadow">
+                          Esgotado
+                        </span>
+                      ) : (
+                        <div className="flex items-center gap-2">
+                          {count > 0 ? (
+                            <>
+                              <button
+                                type="button"
+                                onClick={() => updateDessertCount(item.id, -1)}
+                                className="flex size-7 items-center justify-center rounded-lg bg-secondary text-foreground hover:bg-gold/20"
+                              >
+                                <Minus className="size-3.5" />
+                              </button>
+                              <span className="w-5 text-center font-display text-sm font-bold text-gold">
+                                {count}
+                              </span>
+                            </>
+                          ) : null}
+                          <button
+                            type="button"
+                            onClick={() => updateDessertCount(item.id, 1)}
+                            className="flex size-7 items-center justify-center rounded-lg bg-gold text-background font-bold hover:bg-gold/90 transition-transform active:scale-95"
+                          >
+                            <Plus className="size-3.5" />
+                          </button>
+                        </div>
+                      )}
                     </div>
                   );
                 })}

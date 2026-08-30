@@ -91,7 +91,7 @@ export function OrderCard({
   const formattedDateTime = formatOrderDateTime(first.created_at);
 
   return (
-    <article className="animate-rise panel p-4">
+    <article className="animate-rise panel p-4 notranslate" translate="no">
       {/* Header do cliente */}
       <header className="flex items-start justify-between gap-2">
         <div>

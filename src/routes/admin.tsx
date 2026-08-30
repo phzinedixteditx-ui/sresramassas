@@ -10,7 +10,9 @@ import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { supabase } from "@/integrations/supabase/client";
 import {
+  BEVERAGE_CATEGORIES,
   brl,
+  DESSERT_ITEMS,
   FINISHINGS,
   INGREDIENTS,
   PASTAS,
@@ -508,7 +510,55 @@ function StockManager({
 }) {
   const [filter, setFilter] = useState("");
 
-  const groups: { title: string; items: { id: string; emoji?: string }[] }[] = [
+  const beverageStockItems = useMemo(() => {
+    const list: { id: string; name: string; image?: string; emoji?: string }[] = [];
+    for (const cat of BEVERAGE_CATEGORIES) {
+      for (const item of cat.items) {
+        const displayName =
+          cat.items.length > 1 && cat.name !== item.name
+            ? `${cat.name} — ${item.name}`
+            : item.name;
+        list.push({
+          id: item.id,
+          name: displayName,
+          image: cat.image,
+          emoji: "🥤",
+        });
+      }
+    }
+    return list;
+  }, []);
+
+  const dessertStockItems = useMemo(() => {
+    const list: { id: string; name: string; image?: string; emoji?: string }[] = [];
+    for (const item of DESSERT_ITEMS) {
+      if (item.hasFlavors && item.flavors) {
+        for (const f of item.flavors) {
+          list.push({
+            id: `${item.id}_${f}`,
+            name: `${item.name} — ${f}`,
+            image: item.image,
+            emoji: "🍫",
+          });
+        }
+      } else {
+        list.push({
+          id: item.id,
+          name: item.name,
+          image: item.image,
+          emoji: "🍫",
+        });
+      }
+    }
+    return list;
+  }, []);
+
+  const groups: {
+    title: string;
+    items: { id: string; name?: string; emoji?: string; image?: string }[];
+  }[] = [
+    { title: "Bebidas", items: beverageStockItems },
+    { title: "Doces & Sobremesas", items: dessertStockItems },
     { title: "Massas", items: PASTAS },
     { title: "Molhos", items: SAUCES },
     { title: "Ingredientes / Adicionais", items: INGREDIENTS },
@@ -522,13 +572,13 @@ function StockManager({
         <div>
           <h2 className="font-display text-xl font-bold text-foreground">Controle de Estoque</h2>
           <p className="text-xs text-muted-foreground">
-            Marque ingredientes como esgotados. Eles serão bloqueados no cardápio e na montagem em tempo real.
+            Marque ingredientes, bebidas ou doces como esgotados. Eles serão bloqueados no cardápio e na montagem em tempo real.
           </p>
         </div>
         <div className="relative w-full sm:w-72">
           <Search className="absolute left-3 top-1/2 size-4 -translate-y-1/2 text-muted-foreground" />
           <Input
-            placeholder="Buscar ingrediente..."
+            placeholder="Buscar item do estoque..."
             value={filter}
             onChange={(e) => setFilter(e.target.value)}
             className="pl-9 text-xs"
@@ -538,40 +588,63 @@ function StockManager({
 
       <div className="grid gap-6 md:grid-cols-2 lg:grid-cols-3">
         {groups.map((grp) => {
-          const filteredItems = grp.items.filter((item: { id: string }) =>
-            item.id.toLowerCase().includes(filter.toLowerCase()),
-          );
+          const filteredItems = grp.items.filter((item) => {
+            const label = item.name || item.id;
+            return label.toLowerCase().includes(filter.toLowerCase());
+          });
           if (filteredItems.length === 0) return null;
 
           return (
             <div key={grp.title} className="panel p-4">
-              <h3 className="mb-3 font-display text-sm font-bold text-gold uppercase tracking-wider">
-                {grp.title}
+              <h3 className="mb-3 font-display text-sm font-bold text-gold uppercase tracking-wider flex items-center justify-between">
+                <span>{grp.title}</span>
+                <span className="text-[11px] font-normal text-muted-foreground">
+                  ({filteredItems.length})
+                </span>
               </h3>
-              <div className="divide-y divide-border/50">
-                {filteredItems.map((item: { id: string; emoji?: string }) => {
-                  const isEsgotado = unavailable.includes(item.id);
+              <div className="divide-y divide-border/50 max-h-[480px] overflow-y-auto pr-1">
+                {filteredItems.map((item) => {
+                  const label = item.name || item.id;
+                  const isEsgotado =
+                    unavailable.includes(item.id) || (item.name ? unavailable.includes(item.name) : false);
                   return (
                     <div
                       key={item.id}
-                      className="flex items-center justify-between py-2.5 text-xs transition-colors"
+                      className="flex items-center justify-between py-2.5 text-xs transition-colors gap-2"
                     >
-                      <div className="flex items-center gap-2">
-                        {item.emoji && (
+                      <div className="flex items-center gap-2 min-w-0">
+                        {item.image ? (
+                          <img
+                            src={item.image}
+                            alt={label}
+                            className="size-6 rounded-md object-cover shrink-0 border border-border/40"
+                          />
+                        ) : item.emoji ? (
                           item.emoji.startsWith("/") ? (
-                            <img src={item.emoji} alt={item.id} className="size-5 object-contain" />
+                            <img
+                              src={item.emoji}
+                              alt={label}
+                              className="size-5 object-contain shrink-0"
+                            />
                           ) : (
-                            <span className="text-base">{item.emoji}</span>
+                            <span className="text-base shrink-0">{item.emoji}</span>
                           )
-                        )}
-                        <span className={isEsgotado ? "text-muted-foreground line-through" : "text-foreground font-medium"}>
-                          {item.id}
+                        ) : null}
+                        <span
+                          className={`truncate font-medium ${
+                            isEsgotado
+                              ? "text-muted-foreground line-through"
+                              : "text-foreground"
+                          }`}
+                          title={label}
+                        >
+                          {label}
                         </span>
                       </div>
                       <button
                         type="button"
                         onClick={() => onToggle(item.id, !isEsgotado)}
-                        className={`rounded-lg px-2.5 py-1 text-[11px] font-bold tracking-wider uppercase transition-all ${
+                        className={`shrink-0 rounded-lg px-2.5 py-1 text-[11px] font-bold tracking-wider uppercase transition-all ${
                           isEsgotado
                             ? "border border-red-500/50 bg-red-500/10 text-red-400 hover:bg-red-500/20"
                             : "border border-emerald-500/40 bg-emerald-500/10 text-emerald-400 hover:bg-emerald-500/20"

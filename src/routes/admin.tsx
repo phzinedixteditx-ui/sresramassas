@@ -537,16 +537,16 @@ function StockManager({
           list.push({
             id: `${item.id}_${f}`,
             name: `${item.name} — ${f}`,
-            image: item.image,
             emoji: "🍫",
+            ...(item.image ? { image: item.image } : {}),
           });
         }
       } else {
         list.push({
           id: item.id,
           name: item.name,
-          image: item.image,
           emoji: "🍫",
+          ...(item.image ? { image: item.image } : {}),
         });
       }
     }

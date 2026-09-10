@@ -11,6 +11,7 @@ import {
   DESSERT_ITEMS,
   FINISHINGS,
   INGREDIENTS,
+  MIXED_SAUCE_PRICE,
   PASTAS,
   SAUCES,
   SAUTES,
@@ -137,7 +138,14 @@ function Cardapio() {
           <div className="grid gap-3 sm:grid-cols-2">
             {SAUCES.map((s) => (
               <div key={s.id} className="rounded-2xl border border-border bg-secondary/40 p-4">
-                <p className="font-semibold text-foreground">{s.id}</p>
+                <div className="flex items-center justify-between">
+                  <p className="font-semibold text-foreground">{s.id}</p>
+                  {s.id === "Misturado" && (
+                    <span className="rounded-md border border-gold/40 bg-gold/10 px-2 py-0.5 font-display text-xs font-bold text-gold">
+                      + {brl(MIXED_SAUCE_PRICE)}
+                    </span>
+                  )}
+                </div>
                 <p className="mt-1 text-xs text-muted-foreground">{s.desc}</p>
               </div>
             ))}

@@ -17,18 +17,26 @@ export function whatsappLink(phone: string, message?: string) {
   return `https://wa.me/${withDdi}${message ? `?text=${encodeURIComponent(message)}` : ""}`;
 }
 
+export const MIXED_SAUCE_PRICE = 2;
+
 export const PASTAS = [
   { id: "Penne", desc: "Tubos curtos, perfeitos para molhos encorpados" },
   { id: "Talharim", desc: "Fitas largas e sedosas, clássicas da casa" },
   { id: "Espaguete", desc: "O fio tradicional que todo mundo ama" },
 ];
 
+export const BASE_MIXABLE_SAUCES = [
+  { id: "Molho Branco", desc: "Cremoso, delicado e aveludado" },
+  { id: "Bolonhesa", desc: "Carne moída apurada no tomate" },
+  { id: "Ao Sugo", desc: "Tomate fresco, alho e manjericão" },
+];
+
 export const SAUCES = [
   { id: "Molho Branco", desc: "Cremoso, delicado e aveludado" },
   { id: "Bolonhesa", desc: "Carne moída apurada no tomate" },
   { id: "Ao Sugo", desc: "Tomate fresco, alho e manjericão" },
-  { id: "Misturado", desc: "Branco + bolonhesa na medida certa" },
-  { id: "Alho e Óleo", desc: "Clássico leve e aromático com alho dourado e azeite" },
+  { id: "Alho e Óleo", desc: "Clássico leve e aromático com alho dourado e azeite (opção única)" },
+  { id: "Misturado", desc: "Escolha exatamente 2 molhos para misturar (+ R$ 2,00)" },
 ];
 
 export const INGREDIENTS: { id: string; emoji: string }[] = [
@@ -95,6 +103,15 @@ export const BEVERAGE_CATEGORIES: BeverageCategory[] = [
       { id: "eisenbahn", name: "Eisenbahn", price: 12 },
       { id: "corona", name: "Corona", price: 15 },
       { id: "ice", name: "Ice", price: 10 },
+    ],
+  },
+  {
+    id: "refri_2l",
+    name: "Refrigerante 2L",
+    image: "/images/coca-2l.png",
+    defaultPrice: 15,
+    items: [
+      { id: "coca_2l", name: "Coca-Cola 2L", price: 15 },
     ],
   },
   {

@@ -3,6 +3,7 @@ import { ArrowLeft, ArrowRight, Loader2, MessageCircle, Minus, Plus } from "luci
 import { useEffect, useMemo, useState } from "react";
 import { toast } from "sonner";
 
+import { cn } from "@/lib/utils";
 import { OptionCard } from "@/components/order/OptionCard";
 import { StepProgress } from "@/components/order/StepProgress";
 import { SiteFooter } from "@/components/SiteFooter";
@@ -13,12 +14,14 @@ import { Label } from "@/components/ui/label";
 import { Textarea } from "@/components/ui/textarea";
 import { supabase } from "@/integrations/supabase/client";
 import {
+  BASE_MIXABLE_SAUCES,
   BEVERAGE_CATEGORIES,
   brl,
   CREDIT_CARD_FEE,
   DESSERT_ITEMS,
   FINISHINGS,
   INGREDIENTS,
+  MIXED_SAUCE_PRICE,
   PASTAS,
   PAYMENT_METHODS,
   PaymentMethod,
@@ -83,6 +86,7 @@ type CartItem = {
   size: SizeId;
   pasta: string;
   sauces: string[];
+  isMixedSauce?: boolean;
   ingredients: string[];
   shrimp: boolean;
   saute: string;
@@ -98,6 +102,7 @@ function Montar() {
   // Estado da massa atual
   const [size, setSize] = useState<SizeId | null>(null);
   const [pasta, setPasta] = useState<string | null>(null);
+  const [sauceMode, setSauceMode] = useState<string | null>(null);
   const [sauces, setSauces] = useState<string[]>([]);
   const [ingredients, setIngredients] = useState<string[]>([]);
   const [shrimp, setShrimp] = useState(false);
@@ -166,7 +171,9 @@ function Montar() {
 
   const info = sizeInfo(size);
   const limit = info?.limit ?? 0;
-  const currentTotal = (info?.price ?? 0) + (shrimp ? SHRIMP_PRICE : 0);
+  const isMixedSauce = sauceMode === "Misturado";
+  const mixedSauceFee = isMixedSauce ? MIXED_SAUCE_PRICE : 0;
+  const currentTotal = (info?.price ?? 0) + (shrimp ? SHRIMP_PRICE : 0) + mixedSauceFee;
 
   const cartTotal = cartItems.reduce((acc, item) => acc + item.total, 0);
 
@@ -212,7 +219,7 @@ function Montar() {
       case 1:
         return !!pasta;
       case 2:
-        return sauces.length > 0;
+        return sauceMode === "Misturado" ? sauces.length === 2 : (!!sauceMode && sauces.length === 1);
       case 3:
         return ingredients.length > 0;
       case 5:
@@ -235,13 +242,7 @@ function Montar() {
       default:
         return true;
     }
-  }, [step, size, pasta, sauces, ingredients, saute, massaLabel, customer, paymentMethod]);
-
-  function toggleSauce(sauceName: string) {
-    setSauces((prev) =>
-      prev.includes(sauceName) ? prev.filter((s) => s !== sauceName) : [...prev, sauceName],
-    );
-  }
+  }, [step, size, pasta, sauceMode, sauces, ingredients, saute, massaLabel, customer, paymentMethod]);
 
   function toggleIngredient(id: string) {
     if (unavailableIngredients.includes(id)) {
@@ -302,6 +303,12 @@ function Montar() {
 
   function next() {
     if (!canAdvance) {
+      if (step === 2 && sauceMode === "Misturado" && sauces.length < 2) {
+        toast.error("Selecione 2 molhos", {
+          description: "Por favor, escolha exatamente 2 molhos para a opção misturada.",
+        });
+        return;
+      }
       if (step === 6 && !massaLabel.trim()) {
         toast.error("Identificação obrigatória", {
           description: "Por favor, informe para quem é essa massa.",
@@ -321,18 +328,23 @@ function Montar() {
   }
 
   function addToCartAndAddAnother() {
-    if (!size || !pasta || sauces.length === 0 || !saute || !massaLabel.trim()) {
+    const isSauceValid =
+      sauceMode === "Misturado" ? sauces.length === 2 : !!sauceMode && sauces.length === 1;
+    if (!size || !pasta || !isSauceValid || !saute || !massaLabel.trim()) {
       toast.error("Termine de montar a massa atual antes de adicionar outra.", {
-        description: "Certifique-se de preencher o nome de quem vai comer essa massa.",
+        description: "Certifique-se de escolher o molho e preencher o nome de quem vai comer essa massa.",
       });
       return;
     }
+    const formattedSauce =
+      sauceMode === "Misturado" ? `Misturado (${sauces.join(" + ")})` : sauces[0] || sauceMode || "";
     setCartItems((prev) => [
       ...prev,
       {
         size,
         pasta,
-        sauces,
+        sauces: [formattedSauce],
+        isMixedSauce: sauceMode === "Misturado",
         ingredients,
         shrimp,
         saute,
@@ -343,6 +355,7 @@ function Montar() {
     ]);
     setSize(null);
     setPasta(null);
+    setSauceMode(null);
     setSauces([]);
     setIngredients([]);
     setShrimp(false);
@@ -355,7 +368,9 @@ function Montar() {
   }
 
   async function submitOrder() {
-    const hasCurrentItem = size && pasta && sauces.length > 0 && saute && massaLabel.trim();
+    const isSauceValid =
+      sauceMode === "Misturado" ? sauces.length === 2 : !!sauceMode && sauces.length === 1;
+    const hasCurrentItem = size && pasta && isSauceValid && saute && massaLabel.trim();
     if (cartItems.length === 0 && !hasCurrentItem) {
       toast.error("Nenhuma massa configurada");
       return;
@@ -365,10 +380,13 @@ function Montar() {
 
     const allItems: CartItem[] = [...cartItems];
     if (hasCurrentItem) {
+      const formattedSauce =
+        sauceMode === "Misturado" ? `Misturado (${sauces.join(" + ")})` : sauces[0] || sauceMode || "";
       allItems.push({
         size,
         pasta,
-        sauces,
+        sauces: [formattedSauce],
+        isMixedSauce: sauceMode === "Misturado",
         ingredients,
         shrimp,
         saute,
@@ -584,26 +602,132 @@ function Montar() {
             </StepShell>
           ) : null}
 
-          {/* ETAPA 2: MOLHOS (MÚLTIPLA SELEÇÃO) */}
+          {/* ETAPA 2: MOLHO */}
           {step === 2 ? (
             <StepShell
-              title="Escolha seus molhos"
-              subtitle="Você pode escolher mais de um molho para misturar!"
+              title="Escolha o molho da sua massa"
+              subtitle="Escolha um molho tradicional ou combine exatamente 2 molhos especiais no misturado (+ R$ 2,00)."
               badge={
-                sauces.length > 0 ? `${sauces.length} selecionado(s)` : "Pelo menos 1 obrigatório"
+                sauceMode === "Misturado"
+                  ? `${sauces.length} / 2 molhos selecionados`
+                  : sauceMode
+                    ? sauceMode
+                    : "Escolha uma opção"
               }
             >
               <div className="grid gap-3 sm:grid-cols-2">
-                {SAUCES.map((s) => (
-                  <OptionCard
-                    key={s.id}
-                    title={s.id}
-                    description={s.desc}
-                    selected={sauces.includes(s.id)}
-                    onClick={() => toggleSauce(s.id)}
-                  />
-                ))}
+                {SAUCES.map((s) => {
+                  const isSelected = sauceMode === s.id;
+                  const isMisturadoOption = s.id === "Misturado";
+                  return (
+                    <OptionCard
+                      key={s.id}
+                      title={s.id}
+                      description={s.desc}
+                      {...(isMisturadoOption ? { price: `+ ${brl(MIXED_SAUCE_PRICE)}` } : {})}
+                      selected={isSelected}
+                      onClick={() => {
+                        if (isMisturadoOption) {
+                          setSauceMode("Misturado");
+                          setSauces((prev) => {
+                            const valid = prev.filter((p) =>
+                              BASE_MIXABLE_SAUCES.some((b) => b.id === p),
+                            );
+                            return valid.length === 2 ? valid : [];
+                          });
+                        } else {
+                          setSauceMode(s.id);
+                          setSauces([s.id]);
+                        }
+                      }}
+                    />
+                  );
+                })}
               </div>
+
+              {sauceMode === "Misturado" ? (
+                <div className="animate-rise mt-5 rounded-2xl border border-gold/40 bg-gold/5 p-4 sm:p-5">
+                  <div className="flex flex-wrap items-center justify-between gap-2 border-b border-gold/20 pb-3">
+                    <div>
+                      <p className="font-display text-sm font-bold text-gold uppercase tracking-wider">
+                        🥣 Selecione os 2 molhos para misturar
+                      </p>
+                      <p className="text-xs text-muted-foreground mt-0.5">
+                        Escolha exatamente 2 opções para compor seu molho misturado (+ {brl(MIXED_SAUCE_PRICE)}).
+                      </p>
+                    </div>
+                    <span
+                      className={cn(
+                        "rounded-full px-3 py-1 text-xs font-bold",
+                        sauces.length === 2
+                          ? "bg-gold text-primary-foreground shadow-gold"
+                          : "bg-secondary text-muted-foreground border border-border",
+                      )}
+                    >
+                      {sauces.length} / 2 selecionados
+                    </span>
+                  </div>
+
+                  <div className="mt-4 grid gap-3 sm:grid-cols-3">
+                    {BASE_MIXABLE_SAUCES.map((b) => {
+                      const isPicked = sauces.includes(b.id);
+                      return (
+                        <button
+                          key={b.id}
+                          type="button"
+                          onClick={() => {
+                            if (isPicked) {
+                              setSauces((prev) => prev.filter((x) => x !== b.id));
+                            } else {
+                              if (sauces.length < 2) {
+                                setSauces((prev) => [...prev, b.id]);
+                              } else {
+                                toast.error("Limite de 2 molhos", {
+                                  description:
+                                    "No molho misturado são apenas 2 opções. Desmarque uma para trocar.",
+                                });
+                              }
+                            }
+                          }}
+                          className={cn(
+                            "group relative flex flex-col gap-1 rounded-xl border p-3.5 text-left transition-all",
+                            isPicked
+                              ? "border-gold bg-gold/15 text-gold font-bold shadow-sm ring-1 ring-gold"
+                              : "border-border bg-secondary/50 hover:border-gold/50 text-foreground",
+                          )}
+                        >
+                          <div className="flex items-center justify-between">
+                            <span className="font-semibold text-sm">{b.id}</span>
+                            <span
+                              className={cn(
+                                "flex size-5 items-center justify-center rounded-full border text-[10px] transition-colors",
+                                isPicked
+                                  ? "border-gold bg-gold text-primary-foreground font-bold"
+                                  : "border-muted-foreground/40 text-muted-foreground",
+                              )}
+                            >
+                              {isPicked ? "✓" : "+"}
+                            </span>
+                          </div>
+                          <span className="text-[11px] text-muted-foreground font-normal leading-tight">
+                            {b.desc}
+                          </span>
+                        </button>
+                      );
+                    })}
+                  </div>
+
+                  {sauces.length === 2 ? (
+                    <p className="mt-3.5 text-xs font-medium text-emerald-400 flex items-center gap-1.5">
+                      ✓ Mistura selecionada: <strong>{sauces.join(" + ")}</strong> (+ {brl(MIXED_SAUCE_PRICE)})
+                    </p>
+                  ) : (
+                    <p className="mt-3.5 text-xs text-amber-400">
+                      ⚠️ Selecione mais {2 - sauces.length} molho(s) para completar sua mistura de 2 molhos.
+                    </p>
+                  )}
+                </div>
+              ) : null}
             </StepShell>
           ) : null}
 
@@ -1174,7 +1298,11 @@ function Montar() {
                     </div>
                     <SummaryRow label="Tamanho" value={sizeInfo(item.size)?.label ?? "-"} />
                     <SummaryRow label="Massa" value={item.pasta ?? "-"} />
-                    <SummaryRow label="Molhos" list={item.sauces} />
+                    <SummaryRow
+                      label="Molho"
+                      list={item.sauces}
+                      extra={item.isMixedSauce ? `+ ${brl(MIXED_SAUCE_PRICE)}` : undefined}
+                    />
                     <SummaryRow label="Ingredientes" list={item.ingredients} />
                     {item.shrimp && (
                       <SummaryRow label="Camarão" value="Sim" extra={`+ ${brl(SHRIMP_PRICE)}`} />
@@ -1198,7 +1326,15 @@ function Montar() {
                       extra={brl(info?.price ?? 0)}
                     />
                     <SummaryRow label="Massa" value={pasta ?? "-"} />
-                    <SummaryRow label="Molhos" list={sauces} />
+                    <SummaryRow
+                      label="Molho"
+                      list={
+                        sauceMode === "Misturado"
+                          ? [`Misturado (${sauces.join(" + ")})`]
+                          : sauces
+                      }
+                      extra={sauceMode === "Misturado" ? `+ ${brl(MIXED_SAUCE_PRICE)}` : undefined}
+                    />
                     <SummaryRow label="Ingredientes" list={ingredients} />
                     {shrimp && (
                       <SummaryRow label="Camarão" value="Sim" extra={`+ ${brl(SHRIMP_PRICE)}`} />

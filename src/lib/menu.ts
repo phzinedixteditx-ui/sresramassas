@@ -58,7 +58,6 @@ export const INGREDIENTS: { id: string; emoji: string }[] = [
   { id: "Brócolis", emoji: "🥦" },
   { id: "Frango", emoji: "🍗" },
   { id: "Ovo de codorna", emoji: "🥚" },
-  { id: "Azeitona preta", emoji: "🫒" },
   { id: "Azeitona comum", emoji: "🫒" },
   { id: "Ervilha", emoji: "🟢" },
 ];
@@ -103,15 +102,6 @@ export const BEVERAGE_CATEGORIES: BeverageCategory[] = [
       { id: "eisenbahn", name: "Eisenbahn", price: 12 },
       { id: "corona", name: "Corona", price: 15 },
       { id: "ice", name: "Ice", price: 10 },
-    ],
-  },
-  {
-    id: "refri_2l",
-    name: "Refrigerante 2L",
-    image: "/images/coca-2l.png",
-    defaultPrice: 15,
-    items: [
-      { id: "coca_2l", name: "Coca-Cola 2L", price: 15 },
     ],
   },
   {

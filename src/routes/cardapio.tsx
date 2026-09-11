@@ -27,7 +27,7 @@ export const Route = createFileRoute("/cardapio")({
       {
         name: "description",
         content:
-          "Massas, molhos, 21 ingredientes, camarão, refogado, finalizações, bebidas e doces do Sr e Sra Massas. Preços de R$ 24,00 a R$ 27,00.",
+          "Massas, molhos, 20 ingredientes, camarão, refogado, finalizações, bebidas e doces do Sr e Sra Massas. Preços de R$ 24,00 a R$ 27,00.",
       },
       { property: "og:title", content: "Cardápio — Sr e Sra Massas" },
       {

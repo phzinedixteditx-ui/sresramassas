@@ -120,7 +120,7 @@ function Index() {
               Você escolhe, <span className="text-gradient-gold">a gente prepara</span>
             </h2>
             <p className="mt-2 max-w-xl text-sm text-muted-foreground">
-              Três massas, quatro molhos, 21 ingredientes e finalizações à sua escolha.
+              Três massas, molhos especiais, 20 ingredientes e finalizações à sua escolha.
             </p>
             <div className="mt-8 grid gap-6 sm:grid-cols-2">
               <div>

@@ -217,13 +217,23 @@ function Montar() {
       case 0:
         return !!size;
       case 1:
-        return !!pasta;
+        return !!pasta && !unavailableIngredients.includes(pasta);
       case 2:
-        return sauceMode === "Misturado" ? sauces.length === 2 : (!!sauceMode && sauces.length === 1);
+        if (sauceMode === "Misturado") {
+          return (
+            sauces.length === 2 &&
+            !sauces.some((s) => unavailableIngredients.includes(s))
+          );
+        }
+        return (
+          !!sauceMode &&
+          sauces.length === 1 &&
+          !unavailableIngredients.includes(sauceMode)
+        );
       case 3:
         return ingredients.length > 0;
       case 5:
-        return !!saute;
+        return !!saute && !unavailableIngredients.includes(saute);
       case 6:
         return massaLabel.trim().length >= 1;
       case 7: // Bebidas (opcional)
@@ -242,7 +252,7 @@ function Montar() {
       default:
         return true;
     }
-  }, [step, size, pasta, sauceMode, sauces, ingredients, saute, massaLabel, customer, paymentMethod]);
+  }, [step, size, pasta, sauceMode, sauces, ingredients, saute, massaLabel, customer, paymentMethod, unavailableIngredients]);
 
   function toggleIngredient(id: string) {
     if (unavailableIngredients.includes(id)) {
@@ -589,15 +599,33 @@ function Montar() {
           {step === 1 ? (
             <StepShell title="Escolha sua massa" subtitle="Uma opção por prato.">
               <div className="grid gap-3 sm:grid-cols-3">
-                {PASTAS.map((p) => (
-                  <OptionCard
-                    key={p.id}
-                    title={p.id}
-                    description={p.desc}
-                    selected={pasta === p.id}
-                    onClick={() => setPasta(p.id)}
-                  />
-                ))}
+                {PASTAS.map((p) => {
+                  const isUnavailable = unavailableIngredients.includes(p.id);
+                  return (
+                    <div key={p.id} className="relative">
+                      <OptionCard
+                        title={p.id}
+                        description={p.desc}
+                        selected={pasta === p.id}
+                        disabled={isUnavailable}
+                        onClick={() => {
+                          if (isUnavailable) {
+                            toast.error("Massa indisponível", {
+                              description: `${p.id} está temporariamente esgotada.`,
+                            });
+                            return;
+                          }
+                          setPasta(p.id);
+                        }}
+                      />
+                      {isUnavailable ? (
+                        <span className="absolute -top-1.5 -right-1.5 rounded-full bg-red-600 px-2 py-0.5 text-[9px] font-bold text-white shadow z-10">
+                          Esgotado
+                        </span>
+                      ) : null}
+                    </div>
+                  );
+                })}
               </div>
             </StepShell>
           ) : null}
@@ -617,30 +645,46 @@ function Montar() {
             >
               <div className="grid gap-3 sm:grid-cols-2">
                 {SAUCES.map((s) => {
+                  const isUnavailable = unavailableIngredients.includes(s.id);
                   const isSelected = sauceMode === s.id;
                   const isMisturadoOption = s.id === "Misturado";
                   return (
-                    <OptionCard
-                      key={s.id}
-                      title={s.id}
-                      description={s.desc}
-                      {...(isMisturadoOption ? { price: `+ ${brl(MIXED_SAUCE_PRICE)}` } : {})}
-                      selected={isSelected}
-                      onClick={() => {
-                        if (isMisturadoOption) {
-                          setSauceMode("Misturado");
-                          setSauces((prev) => {
-                            const valid = prev.filter((p) =>
-                              BASE_MIXABLE_SAUCES.some((b) => b.id === p),
-                            );
-                            return valid.length === 2 ? valid : [];
-                          });
-                        } else {
-                          setSauceMode(s.id);
-                          setSauces([s.id]);
-                        }
-                      }}
-                    />
+                    <div key={s.id} className="relative">
+                      <OptionCard
+                        title={s.id}
+                        description={s.desc}
+                        {...(isMisturadoOption ? { price: `+ ${brl(MIXED_SAUCE_PRICE)}` } : {})}
+                        selected={isSelected}
+                        disabled={isUnavailable}
+                        onClick={() => {
+                          if (isUnavailable) {
+                            toast.error("Molho indisponível", {
+                              description: `${s.id} está temporariamente esgotado.`,
+                            });
+                            return;
+                          }
+                          if (isMisturadoOption) {
+                            setSauceMode("Misturado");
+                            setSauces((prev) => {
+                              const valid = prev.filter((p) =>
+                                BASE_MIXABLE_SAUCES.some(
+                                  (b) => b.id === p && !unavailableIngredients.includes(b.id),
+                                ),
+                              );
+                              return valid.length === 2 ? valid : [];
+                            });
+                          } else {
+                            setSauceMode(s.id);
+                            setSauces([s.id]);
+                          }
+                        }}
+                      />
+                      {isUnavailable ? (
+                        <span className="absolute -top-1.5 -right-1.5 rounded-full bg-red-600 px-2 py-0.5 text-[9px] font-bold text-white shadow z-10">
+                          Esgotado
+                        </span>
+                      ) : null}
+                    </div>
                   );
                 })}
               </div>
@@ -670,49 +714,64 @@ function Montar() {
 
                   <div className="mt-4 grid gap-3 sm:grid-cols-3">
                     {BASE_MIXABLE_SAUCES.map((b) => {
+                      const isUnavailable = unavailableIngredients.includes(b.id);
                       const isPicked = sauces.includes(b.id);
                       return (
-                        <button
-                          key={b.id}
-                          type="button"
-                          onClick={() => {
-                            if (isPicked) {
-                              setSauces((prev) => prev.filter((x) => x !== b.id));
-                            } else {
-                              if (sauces.length < 2) {
-                                setSauces((prev) => [...prev, b.id]);
-                              } else {
-                                toast.error("Limite de 2 molhos", {
-                                  description:
-                                    "No molho misturado são apenas 2 opções. Desmarque uma para trocar.",
+                        <div key={b.id} className="relative">
+                          <button
+                            type="button"
+                            disabled={isUnavailable}
+                            onClick={() => {
+                              if (isUnavailable) {
+                                toast.error("Molho indisponível", {
+                                  description: `${b.id} está temporariamente esgotado.`,
                                 });
+                                return;
                               }
-                            }
-                          }}
-                          className={cn(
-                            "group relative flex flex-col gap-1 rounded-xl border p-3.5 text-left transition-all",
-                            isPicked
-                              ? "border-gold bg-gold/15 text-gold font-bold shadow-sm ring-1 ring-gold"
-                              : "border-border bg-secondary/50 hover:border-gold/50 text-foreground",
-                          )}
-                        >
-                          <div className="flex items-center justify-between">
-                            <span className="font-semibold text-sm">{b.id}</span>
-                            <span
-                              className={cn(
-                                "flex size-5 items-center justify-center rounded-full border text-[10px] transition-colors",
-                                isPicked
-                                  ? "border-gold bg-gold text-primary-foreground font-bold"
-                                  : "border-muted-foreground/40 text-muted-foreground",
-                              )}
-                            >
-                              {isPicked ? "✓" : "+"}
+                              if (isPicked) {
+                                setSauces((prev) => prev.filter((x) => x !== b.id));
+                              } else {
+                                if (sauces.length < 2) {
+                                  setSauces((prev) => [...prev, b.id]);
+                                } else {
+                                  toast.error("Limite de 2 molhos", {
+                                    description:
+                                      "No molho misturado são apenas 2 opções. Desmarque uma para trocar.",
+                                  });
+                                }
+                              }
+                            }}
+                            className={cn(
+                              "group relative flex w-full flex-col gap-1 rounded-xl border p-3.5 text-left transition-all",
+                              isPicked
+                                ? "border-gold bg-gold/15 text-gold font-bold shadow-sm ring-1 ring-gold"
+                                : "border-border bg-secondary/50 hover:border-gold/50 text-foreground",
+                              isUnavailable && "cursor-not-allowed opacity-40 hover:border-border hover:bg-secondary/50",
+                            )}
+                          >
+                            <div className="flex items-center justify-between">
+                              <span className="font-semibold text-sm">{b.id}</span>
+                              <span
+                                className={cn(
+                                  "flex size-5 items-center justify-center rounded-full border text-[10px] transition-colors",
+                                  isPicked
+                                    ? "border-gold bg-gold text-primary-foreground font-bold"
+                                    : "border-muted-foreground/40 text-muted-foreground",
+                                )}
+                              >
+                                {isPicked ? "✓" : "+"}
+                              </span>
+                            </div>
+                            <span className="text-[11px] text-muted-foreground font-normal leading-tight">
+                              {b.desc}
                             </span>
-                          </div>
-                          <span className="text-[11px] text-muted-foreground font-normal leading-tight">
-                            {b.desc}
-                          </span>
-                        </button>
+                          </button>
+                          {isUnavailable ? (
+                            <span className="absolute -top-1.5 -right-1.5 rounded-full bg-red-600 px-2 py-0.5 text-[9px] font-bold text-white shadow z-10">
+                              Esgotado
+                            </span>
+                          ) : null}
+                        </div>
                       );
                     })}
                   </div>
@@ -795,16 +854,34 @@ function Montar() {
           {step === 5 ? (
             <StepShell title="Como você quer refogar?" subtitle="Uma opção por massa.">
               <div className="grid gap-3 sm:grid-cols-2">
-                {SAUTES.map((s) => (
-                  <OptionCard
-                    key={s.id}
-                    emoji={s.emoji}
-                    title={s.id}
-                    description={s.desc}
-                    selected={saute === s.id}
-                    onClick={() => setSaute(s.id)}
-                  />
-                ))}
+                {SAUTES.map((s) => {
+                  const isUnavailable = unavailableIngredients.includes(s.id);
+                  return (
+                    <div key={s.id} className="relative">
+                      <OptionCard
+                        emoji={s.emoji}
+                        title={s.id}
+                        description={s.desc}
+                        selected={saute === s.id}
+                        disabled={isUnavailable}
+                        onClick={() => {
+                          if (isUnavailable) {
+                            toast.error("Refogado indisponível", {
+                              description: `${s.id} está temporariamente esgotado.`,
+                            });
+                            return;
+                          }
+                          setSaute(s.id);
+                        }}
+                      />
+                      {isUnavailable ? (
+                        <span className="absolute -top-1.5 -right-1.5 rounded-full bg-red-600 px-2 py-0.5 text-[9px] font-bold text-white shadow z-10">
+                          Esgotado
+                        </span>
+                      ) : null}
+                    </div>
+                  );
+                })}
               </div>
             </StepShell>
           ) : null}
@@ -817,20 +894,36 @@ function Montar() {
               badge={`${finishing.length} selecionadas`}
             >
               <div className="grid grid-cols-2 gap-3 sm:grid-cols-3">
-                {FINISHINGS.map((f) => (
-                  <OptionCard
-                    key={f.id}
-                    compact
-                    emoji={f.emoji}
-                    title={f.id}
-                    selected={finishing.includes(f.id)}
-                    onClick={() =>
-                      setFinishing((prev) =>
-                        prev.includes(f.id) ? prev.filter((x) => x !== f.id) : [...prev, f.id],
-                      )
-                    }
-                  />
-                ))}
+                {FINISHINGS.map((f) => {
+                  const isUnavailable = unavailableIngredients.includes(f.id);
+                  return (
+                    <div key={f.id} className="relative">
+                      <OptionCard
+                        compact
+                        emoji={f.emoji}
+                        title={f.id}
+                        selected={finishing.includes(f.id)}
+                        disabled={isUnavailable}
+                        onClick={() => {
+                          if (isUnavailable) {
+                            toast.error("Finalização indisponível", {
+                              description: `${f.id} está temporariamente esgotada.`,
+                            });
+                            return;
+                          }
+                          setFinishing((prev) =>
+                            prev.includes(f.id) ? prev.filter((x) => x !== f.id) : [...prev, f.id],
+                          );
+                        }}
+                      />
+                      {isUnavailable ? (
+                        <span className="absolute -top-1.5 -right-1.5 rounded-full bg-red-600 px-2 py-0.5 text-[9px] font-bold text-white shadow z-10">
+                          Esgotado
+                        </span>
+                      ) : null}
+                    </div>
+                  );
+                })}
               </div>
 
               <div className="mt-8 rounded-2xl border border-gold/40 bg-gold/5 p-5">

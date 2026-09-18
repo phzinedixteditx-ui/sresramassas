@@ -125,30 +125,76 @@ function Cardapio() {
 
         <Section index="2" title="Tipos de massa">
           <div className="grid gap-3 sm:grid-cols-3">
-            {PASTAS.map((p) => (
-              <div key={p.id} className="rounded-2xl border border-border bg-secondary/40 p-4">
-                <p className="font-semibold text-foreground">{p.id}</p>
-                <p className="mt-1 text-xs text-muted-foreground">{p.desc}</p>
-              </div>
-            ))}
+            {PASTAS.map((p) => {
+              const isUnavailable = unavailableIngredients.includes(p.id);
+              return (
+                <div
+                  key={p.id}
+                  className={`relative rounded-2xl border p-4 transition-colors ${
+                    isUnavailable
+                      ? "border-red-500/30 bg-red-950/20 opacity-70"
+                      : "border-border bg-secondary/40"
+                  }`}
+                >
+                  <div className="flex items-center justify-between">
+                    <p
+                      className={`font-semibold ${
+                        isUnavailable ? "line-through text-muted-foreground" : "text-foreground"
+                      }`}
+                    >
+                      {p.id}
+                    </p>
+                    {isUnavailable ? (
+                      <span className="rounded bg-red-600/80 px-1.5 py-0.5 text-[9px] font-bold text-white uppercase">
+                        Esgotado
+                      </span>
+                    ) : null}
+                  </div>
+                  <p className="mt-1 text-xs text-muted-foreground">{p.desc}</p>
+                </div>
+              );
+            })}
           </div>
         </Section>
 
         <Section index="3" title="Molhos">
           <div className="grid gap-3 sm:grid-cols-2">
-            {SAUCES.map((s) => (
-              <div key={s.id} className="rounded-2xl border border-border bg-secondary/40 p-4">
-                <div className="flex items-center justify-between">
-                  <p className="font-semibold text-foreground">{s.id}</p>
-                  {s.id === "Misturado" && (
-                    <span className="rounded-md border border-gold/40 bg-gold/10 px-2 py-0.5 font-display text-xs font-bold text-gold">
-                      + {brl(MIXED_SAUCE_PRICE)}
-                    </span>
-                  )}
+            {SAUCES.map((s) => {
+              const isUnavailable = unavailableIngredients.includes(s.id);
+              return (
+                <div
+                  key={s.id}
+                  className={`relative rounded-2xl border p-4 transition-colors ${
+                    isUnavailable
+                      ? "border-red-500/30 bg-red-950/20 opacity-70"
+                      : "border-border bg-secondary/40"
+                  }`}
+                >
+                  <div className="flex items-center justify-between">
+                    <p
+                      className={`font-semibold ${
+                        isUnavailable ? "line-through text-muted-foreground" : "text-foreground"
+                      }`}
+                    >
+                      {s.id}
+                    </p>
+                    <div className="flex items-center gap-2">
+                      {s.id === "Misturado" && (
+                        <span className="rounded-md border border-gold/40 bg-gold/10 px-2 py-0.5 font-display text-xs font-bold text-gold">
+                          + {brl(MIXED_SAUCE_PRICE)}
+                        </span>
+                      )}
+                      {isUnavailable ? (
+                        <span className="rounded bg-red-600/80 px-1.5 py-0.5 text-[9px] font-bold text-white uppercase">
+                          Esgotado
+                        </span>
+                      ) : null}
+                    </div>
+                  </div>
+                  <p className="mt-1 text-xs text-muted-foreground">{s.desc}</p>
                 </div>
-                <p className="mt-1 text-xs text-muted-foreground">{s.desc}</p>
-              </div>
-            ))}
+              );
+            })}
           </div>
         </Section>
 
@@ -193,28 +239,69 @@ function Cardapio() {
 
         <Section index="6" title="Refogado">
           <div className="grid gap-3 sm:grid-cols-2">
-            {SAUTES.map((s) => (
-              <div key={s.id} className="rounded-2xl border border-border bg-secondary/40 p-4">
-                <p className="font-semibold text-foreground">
-                  {s.emoji} {s.id}
-                </p>
-                <p className="mt-1 text-xs text-muted-foreground">{s.desc}</p>
-              </div>
-            ))}
+            {SAUTES.map((s) => {
+              const isUnavailable = unavailableIngredients.includes(s.id);
+              return (
+                <div
+                  key={s.id}
+                  className={`relative rounded-2xl border p-4 transition-colors ${
+                    isUnavailable
+                      ? "border-red-500/30 bg-red-950/20 opacity-70"
+                      : "border-border bg-secondary/40"
+                  }`}
+                >
+                  <div className="flex items-center justify-between">
+                    <p
+                      className={`font-semibold ${
+                        isUnavailable ? "line-through text-muted-foreground" : "text-foreground"
+                      }`}
+                    >
+                      {s.emoji} {s.id}
+                    </p>
+                    {isUnavailable ? (
+                      <span className="rounded bg-red-600/80 px-1.5 py-0.5 text-[9px] font-bold text-white uppercase">
+                        Esgotado
+                      </span>
+                    ) : null}
+                  </div>
+                  <p className="mt-1 text-xs text-muted-foreground">{s.desc}</p>
+                </div>
+              );
+            })}
           </div>
         </Section>
 
         <Section index="7" title="Finalização">
           <div className="grid grid-cols-2 gap-3 sm:grid-cols-3">
-            {FINISHINGS.map((f) => (
-              <div
-                key={f.id}
-                className="flex items-center gap-3 rounded-xl border border-border bg-secondary/40 px-3 py-2.5"
-              >
-                <span className="text-lg">{f.emoji}</span>
-                <span className="text-sm text-foreground">{f.id}</span>
-              </div>
-            ))}
+            {FINISHINGS.map((f) => {
+              const isUnavailable = unavailableIngredients.includes(f.id);
+              return (
+                <div
+                  key={f.id}
+                  className={`flex items-center justify-between gap-2 rounded-xl border px-3 py-2.5 transition-colors ${
+                    isUnavailable
+                      ? "border-red-500/30 bg-red-950/20 opacity-70"
+                      : "border-border bg-secondary/40"
+                  }`}
+                >
+                  <div className="flex items-center gap-2 min-w-0">
+                    <span className="text-lg shrink-0">{f.emoji}</span>
+                    <span
+                      className={`text-sm truncate ${
+                        isUnavailable ? "line-through text-muted-foreground" : "text-foreground"
+                      }`}
+                    >
+                      {f.id}
+                    </span>
+                  </div>
+                  {isUnavailable ? (
+                    <span className="rounded bg-red-600/80 px-1.5 py-0.5 text-[9px] font-bold text-white uppercase shrink-0">
+                      Esgotado
+                    </span>
+                  ) : null}
+                </div>
+              );
+            })}
           </div>
         </Section>
 

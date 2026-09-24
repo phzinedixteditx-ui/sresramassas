@@ -891,7 +891,7 @@ function Montar() {
             <StepShell
               title="Finalização e Identificação"
               subtitle="Escolha os toques finais e informe obrigatoriamente de quem é este prato."
-              badge={`${finishing.length} selecionadas`}
+              badge={`${finishing.length} / 3 selecionadas`}
             >
               <div className="grid grid-cols-2 gap-3 sm:grid-cols-3">
                 {FINISHINGS.map((f) => {

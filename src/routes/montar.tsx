@@ -912,7 +912,11 @@ function Montar() {
                             return;
                           }
                           setFinishing((prev) =>
-                            prev.includes(f.id) ? prev.filter((x) => x !== f.id) : [...prev, f.id],
+                            prev.includes(f.id)
+                              ? prev.filter((x) => x !== f.id)
+                              : prev.length >= 3
+                                ? prev
+                                : [...prev, f.id],
                           );
                         }}
                       />

@@ -248,7 +248,7 @@ export const DESSERT_ITEMS: DessertItem[] = [
 // --- FORMAS DE PAGAMENTO ---
 export type PaymentMethod = "pix" | "cartao_credito" | "cartao_debito" | "dinheiro";
 
-export const CREDIT_CARD_FEE = 1.0;
+export const CREDIT_CARD_FEE = 2.0;
 
 export const PAYMENT_METHODS: {
   id: PaymentMethod;
@@ -263,7 +263,7 @@ export const PAYMENT_METHODS: {
     label: "Cartão — Crédito",
     group: "Cartão",
     iconEmoji: "💳",
-    feeNotice: "(+ R$ 1,00 taxa da maquininha)",
+    feeNotice: "(+ R$ 2,00 taxa da maquininha)",
   },
   { id: "cartao_debito", label: "Cartão — Débito", group: "Cartão", iconEmoji: "💳" },
   { id: "dinheiro", label: "Dinheiro", group: "Dinheiro", iconEmoji: "💵" },

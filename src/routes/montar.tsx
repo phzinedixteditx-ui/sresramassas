@@ -456,7 +456,7 @@ function Montar() {
       if (paymentMethod) {
         const isCredit = paymentMethod === "cartao_credito";
         extraNotesParts.push(
-          `[Pagamento: ${paymentLabel}${isCredit ? " (+ R$ 1,00 taxa da maquininha)" : ""}]`,
+          `[Pagamento: ${paymentLabel}${isCredit ? " (+ R$ 2,00 taxa da maquininha)" : ""}]`,
         );
       }
       if (i === 0) {
@@ -912,7 +912,11 @@ function Montar() {
                             return;
                           }
                           setFinishing((prev) =>
-                            prev.includes(f.id) ? prev.filter((x) => x !== f.id) : [...prev, f.id],
+                            prev.includes(f.id)
+                              ? prev.filter((x) => x !== f.id)
+                              : prev.length >= 3
+                                ? prev
+                                : [...prev, f.id],
                           );
                         }}
                       />

@@ -10,8 +10,8 @@
 
 ### 2. Finalização: limitar a 3 opções
 - Em `src/routes/montar.tsx`, etapa "Finalização e Identificação":
-  - Ao tentar marcar uma 4ª opção, bloquear e mostrar aviso: "Você pode escolher no máximo 3 finalizações."
-  - Atualizar o contador da etapa para mostrar "X/3 selecionadas".
+  - Ao tentar marcar uma 4ª opção, simplesmente não selecionar (bloqueio silencioso, sem aviso/toast).
+  - Não mostrar contador — manter o selo da etapa como está.
   - Desmarcar continua livre (trocar uma opção por outra funciona).
 
 ## O que NÃO muda

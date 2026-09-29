@@ -20,6 +20,7 @@ import {
   CREDIT_CARD_FEE,
   DESSERT_ITEMS,
   FINISHINGS,
+  getTodayDailyPasta,
   INGREDIENTS,
   MIXED_SAUCE_PRICE,
   PASTAS,
@@ -88,6 +89,8 @@ type CartItem = {
   sauces: string[];
   isMixedSauce?: boolean;
   ingredients: string[];
+  isDailyPasta?: boolean;
+  extraIngredientsFee?: number;
   shrimp: boolean;
   saute: string;
   finishing: string[];
@@ -105,6 +108,8 @@ function Montar() {
   const [sauceMode, setSauceMode] = useState<string | null>(null);
   const [sauces, setSauces] = useState<string[]>([]);
   const [ingredients, setIngredients] = useState<string[]>([]);
+  const [isDailyPasta, setIsDailyPasta] = useState(false);
+  const [presetIngredients, setPresetIngredients] = useState<string[]>([]);
   const [shrimp, setShrimp] = useState(false);
   const [saute, setSaute] = useState<string | null>(null);
   const [finishing, setFinishing] = useState<string[]>([]);
@@ -133,6 +138,23 @@ function Montar() {
   });
 
   const [submitting, setSubmitting] = useState(false);
+
+  // Notificação flutuante com animação descendo/subindo (fade-in / fade-out)
+  const [dailyNotice, setDailyNotice] = useState<{ text: string; isAdd: boolean; id: number } | null>(null);
+  const [noticeExiting, setNoticeExiting] = useState(false);
+
+  function showDailyNotice(text: string, isAdd: boolean) {
+    setNoticeExiting(false);
+    const id = Date.now();
+    setDailyNotice({ text, isAdd, id });
+
+    setTimeout(() => {
+      setNoticeExiting(true);
+      setTimeout(() => {
+        setDailyNotice((curr) => (curr?.id === id ? null : curr));
+      }, 400);
+    }, 2400);
+  }
 
   // Carrega e escuta estoque em tempo real
   useEffect(() => {
@@ -170,10 +192,29 @@ function Montar() {
   }, []);
 
   const info = sizeInfo(size);
-  const limit = info?.limit ?? 0;
+  const sizeLimit = info?.limit ?? 0;
+
+  // Preço base do tamanho (Promocional na Massa do Dia: PP 19.99, Pequeno 24.00, Grande 27.00)
+  const baseSizePrice = useMemo(() => {
+    if (!size) return 0;
+    if (isDailyPasta) {
+      if (size === "kids") return 19.99;
+      if (size === "pequeno") return 24.0;
+      if (size === "grande") return 27.0;
+    }
+    return info?.price ?? 0;
+  }, [size, isDailyPasta, info]);
+
+  // Quantidade de ingredientes adicionais (R$ 1,00 cada)
+  const extraIngredientsCount = useMemo(() => {
+    if (isDailyPasta) return 0;
+    return Math.max(0, ingredients.length - sizeLimit);
+  }, [isDailyPasta, ingredients, sizeLimit]);
+
+  const extraIngredientsFee = extraIngredientsCount * 1.0;
   const isMixedSauce = sauceMode === "Misturado";
   const mixedSauceFee = isMixedSauce ? MIXED_SAUCE_PRICE : 0;
-  const currentTotal = (info?.price ?? 0) + (shrimp ? SHRIMP_PRICE : 0) + mixedSauceFee;
+  const currentTotal = baseSizePrice + extraIngredientsFee + (shrimp ? SHRIMP_PRICE : 0) + mixedSauceFee;
 
   const cartTotal = cartItems.reduce((acc, item) => acc + item.total, 0);
 
@@ -243,8 +284,6 @@ function Montar() {
       case 9: // Seus dados & Pagamento
         return (
           customer.name.trim().length >= 2 &&
-          (customer.orderType === "local" ||
-            customer.phone.replace(/\D/g, "").length >= 10) &&
           (customer.orderType !== "entrega" ||
             (customer.address.trim() !== "" && customer.neighborhood.trim() !== "")) &&
           !!paymentMethod
@@ -261,13 +300,20 @@ function Montar() {
       });
       return;
     }
+    if (isDailyPasta) {
+      toast.info("🔒 Ingredientes fixos", {
+        description: "Os ingredientes da Massa do Dia são fixos e não podem ser alterados nem adicionados.",
+      });
+      return;
+    }
     setIngredients((prev) => {
       if (prev.includes(id)) return prev.filter((i) => i !== id);
-      if (prev.length >= limit) {
-        toast.error("Limite atingido", {
-          description: "Você atingiu o limite de ingredientes. Remova um para escolher outro.",
+
+      const willBeCount = prev.length + 1;
+      if (sizeLimit > 0 && willBeCount > sizeLimit) {
+        toast.info("Ingrediente adicional (+ R$ 1,00)", {
+          description: `${id} ultrapassa os ${sizeLimit} inclusos no tamanho selecionado.`,
         });
-        return prev;
       }
       return [...prev, id];
     });
@@ -313,10 +359,30 @@ function Montar() {
 
   function next() {
     if (!canAdvance) {
-      if (step === 2 && sauceMode === "Misturado" && sauces.length < 2) {
-        toast.error("Selecione 2 molhos", {
-          description: "Por favor, escolha exatamente 2 molhos para a opção misturada.",
-        });
+      if (step === 0 && !size) {
+        toast.error("Escolha o tamanho", { description: "Selecione o tamanho da massa para continuar." });
+        return;
+      }
+      if (step === 1 && (!pasta || unavailableIngredients.includes(pasta))) {
+        toast.error("Escolha a massa", { description: "Selecione o tipo de massa para continuar." });
+        return;
+      }
+      if (step === 2) {
+        if (sauceMode === "Misturado" && sauces.length < 2) {
+          toast.error("Selecione 2 molhos", {
+            description: "Por favor, escolha exatamente 2 molhos para a opção misturada.",
+          });
+          return;
+        }
+        toast.error("Escolha o molho", { description: "Selecione como deseja o molho para continuar." });
+        return;
+      }
+      if (step === 3 && ingredients.length === 0) {
+        toast.error("Escolha os ingredientes", { description: "Selecione ao menos 1 ingrediente para continuar." });
+        return;
+      }
+      if (step === 5 && (!saute || unavailableIngredients.includes(saute))) {
+        toast.error("Escolha o refogado", { description: "Selecione como refogar sua massa para continuar." });
         return;
       }
       if (step === 6 && !massaLabel.trim()) {
@@ -325,13 +391,35 @@ function Montar() {
         });
         return;
       }
-      if (step === 9 && !paymentMethod) {
-        toast.error("Forma de pagamento obrigatória", {
-          description: "Por favor, selecione como deseja pagar.",
-        });
-        return;
+      if (step === 9) {
+        if (customer.name.trim().length < 2) {
+          toast.error("Informe seu nome", {
+            description: "Por favor, preencha o seu nome (pelo menos 2 caracteres).",
+          });
+          return;
+        }
+        if (customer.orderType === "entrega") {
+          if (!customer.address.trim()) {
+            toast.error("Endereço de entrega obrigatório", {
+              description: "Por favor, preencha o nome da rua/avenida para a entrega.",
+            });
+            return;
+          }
+          if (!customer.neighborhood.trim()) {
+            toast.error("Bairro de entrega obrigatório", {
+              description: "Por favor, preencha o bairro para a entrega.",
+            });
+            return;
+          }
+        }
+        if (!paymentMethod) {
+          toast.error("Forma de pagamento obrigatória", {
+            description: "Por favor, selecione como deseja realizar o pagamento.",
+          });
+          return;
+        }
       }
-      toast.error("Escolha uma opção para continuar");
+      toast.error("Preencha os campos obrigatórios para continuar");
       return;
     }
     setStep((s) => Math.min(s + 1, STEP_LABELS.length - 1));
@@ -356,6 +444,8 @@ function Montar() {
         sauces: [formattedSauce],
         isMixedSauce: sauceMode === "Misturado",
         ingredients,
+        isDailyPasta,
+        extraIngredientsFee,
         shrimp,
         saute,
         finishing,
@@ -368,6 +458,8 @@ function Montar() {
     setSauceMode(null);
     setSauces([]);
     setIngredients([]);
+    setIsDailyPasta(false);
+    setPresetIngredients([]);
     setShrimp(false);
     setSaute(null);
     setFinishing([]);
@@ -398,6 +490,8 @@ function Montar() {
         sauces: [formattedSauce],
         isMixedSauce: sauceMode === "Misturado",
         ingredients,
+        isDailyPasta,
+        extraIngredientsFee,
         shrimp,
         saute,
         finishing,
@@ -456,7 +550,7 @@ function Montar() {
       if (paymentMethod) {
         const isCredit = paymentMethod === "cartao_credito";
         extraNotesParts.push(
-          `[Pagamento: ${paymentLabel}${isCredit ? " (+ R$ 2,00 taxa da maquininha)" : ""}]`,
+          `[Pagamento: ${paymentLabel}${isCredit ? ` (+ ${brl(CREDIT_CARD_FEE)} taxa da maquininha)` : ""}]`,
         );
       }
       if (i === 0) {
@@ -507,12 +601,14 @@ function Montar() {
     // Formatação elegante da mensagem do WhatsApp conforme solicitado
     const massasText = allItems
       .map((item, idx) => {
+        const extraCount = item.extraIngredientsFee ? Math.round(item.extraIngredientsFee / 1.0) : 0;
         return [
-          `*Massa ${idx + 1} — ${item.massaLabel}*`,
+          `*Massa ${idx + 1} — ${item.massaLabel}*${item.isDailyPasta ? " (Massa do Dia 🍝)" : ""}`,
           `• Tamanho: ${sizeInfo(item.size)?.label}`,
           `• Massa: ${item.pasta}`,
           `• Molhos: ${item.sauces.join(", ")}`,
           `• Adicionais: ${item.ingredients.length ? item.ingredients.join(", ") : "Nenhum"}`,
+          extraCount > 0 ? `• Ingredientes Extras: ${extraCount} (+ ${brl(item.extraIngredientsFee!)})` : null,
           item.shrimp ? `• Camarão: Sim (+ ${brl(SHRIMP_PRICE)})` : null,
           `• Refogado: ${item.saute}`,
           `• Finalização: ${item.finishing.length ? item.finishing.join(", ") : "Nenhuma"}`,
@@ -564,10 +660,111 @@ function Montar() {
     window.location.href = link;
   }
 
+  const todayDailyPasta = getTodayDailyPasta();
+  const isSundayDailyPasta = isDailyPasta && todayDailyPasta?.dayOfWeek === 0;
+  const isFixedSauceDailyPasta = isDailyPasta && !isSundayDailyPasta;
+
   return (
-    <div className="min-h-screen bg-background pb-28">
+    <div className="min-h-screen bg-background pb-28 relative">
+      {dailyNotice && (
+        <div
+          key={dailyNotice.id}
+          className={cn(
+            "fixed top-5 left-1/2 -translate-x-1/2 z-50 flex items-center gap-2.5 rounded-full px-5 py-2.5 text-xs font-bold text-white shadow-2xl backdrop-blur-xl border border-gold/70 bg-gradient-to-r from-gold/30 via-black/90 to-gold/30 transition-all",
+            noticeExiting ? "animate-notice-out" : "animate-notice-in"
+          )}
+        >
+          <span className="text-base">{dailyNotice.isAdd ? "🍝" : "🔄"}</span>
+          <span className="tracking-wide">{dailyNotice.text}</span>
+        </div>
+      )}
       <SiteHeader />
       <main className="mx-auto max-w-3xl px-4 py-8 sm:px-6">
+        {todayDailyPasta ? (
+          <div className="mb-6 rounded-2xl border border-gold/40 bg-gradient-to-r from-gold/15 via-gold/5 to-background p-4 shadow-md sm:p-5 transition-all duration-300">
+            <div className="flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between">
+              <div>
+                <span className="inline-flex items-center gap-1 rounded-full bg-gold px-2.5 py-0.5 text-[10px] font-black uppercase text-primary-foreground shadow">
+                  {todayDailyPasta.emoji} MASSA DO DIA — {todayDailyPasta.dayName}
+                </span>
+                <h3 className="mt-1.5 font-display text-lg font-bold text-foreground">
+                  {todayDailyPasta.title}
+                </h3>
+                <p className="text-xs text-muted-foreground">{todayDailyPasta.desc}</p>
+              </div>
+              <Button
+                type="button"
+                variant="gold"
+                size="sm"
+                className="shrink-0 font-bold shadow-gold transition-transform hover:scale-105 active:scale-95"
+                onClick={() => {
+                  setIsDailyPasta(true);
+                  setPresetIngredients(todayDailyPasta.ingredients);
+                  if (!size) setSize("pequeno");
+                  if (PASTAS.some((p) => p.id === todayDailyPasta.pasta)) {
+                    setPasta(todayDailyPasta.pasta);
+                  }
+                  if (todayDailyPasta.sauce === "Misturado") {
+                    setSauceMode("Misturado");
+                    setSauces(["Molho Branco", "Bolonhesa"]);
+                  } else if (SAUCES.some((s) => s.id === todayDailyPasta.sauce)) {
+                    setSauceMode(todayDailyPasta.sauce);
+                    setSauces([todayDailyPasta.sauce]);
+                  }
+                  setIngredients(todayDailyPasta.ingredients);
+                  showDailyNotice("Massa do Dia selecionada", true);
+                }}
+              >
+                MONTAR MASSA DO DIA
+              </Button>
+            </div>
+          </div>
+        ) : (
+          <div className="mb-6 rounded-2xl border border-border bg-secondary/30 p-4 text-center">
+            <p className="text-xs font-semibold text-muted-foreground">
+              📅 Segunda-feira: Restaurante Fechado • Confira as Massas do Dia de Terça a Domingo no Cardápio!
+            </p>
+          </div>
+        )}
+
+        {isDailyPasta ? (
+          <div className="animate-slide-down animate-glow-pulse mb-6 rounded-2xl border border-gold/50 bg-gradient-to-r from-gold/20 via-gold/10 to-background p-4 shadow-lg backdrop-blur-md transition-all duration-300">
+            <div className="flex flex-col gap-2.5 sm:flex-row sm:items-center sm:justify-between">
+              <div className="flex items-center gap-3">
+                <div className="flex size-10 shrink-0 items-center justify-center rounded-xl bg-gold/20 text-2xl shadow-inner border border-gold/30">
+                  {todayDailyPasta?.emoji ?? "🍝"}
+                </div>
+                <div>
+                  <div className="flex items-center gap-2">
+                    <span className="inline-flex items-center gap-1 rounded-full bg-gold px-2.5 py-0.5 text-[10px] font-black uppercase text-primary-foreground shadow">
+                      ✨ MASSA DO DIA ATIVA
+                    </span>
+                    <span className="text-xs font-bold text-gold">
+                      {todayDailyPasta?.title}
+                    </span>
+                  </div>
+                  <p className="mt-1 text-xs text-muted-foreground">
+                    Preços promocionais: PP <span className="font-bold text-foreground">R$ 19,99</span> | Pequena <span className="font-bold text-foreground">R$ 24,00</span> | Grande <span className="font-bold text-foreground">R$ 27,00</span>
+                  </p>
+                </div>
+              </div>
+              <Button
+                type="button"
+                variant="ghost"
+                size="sm"
+                className="shrink-0 text-xs font-semibold text-muted-foreground transition-colors hover:bg-gold/15 hover:text-gold"
+                onClick={() => {
+                  setIsDailyPasta(false);
+                  setPresetIngredients([]);
+                  showDailyNotice("Massa do Dia removida", false);
+                }}
+              >
+                Trocar para Massa Tradicional 🔄
+              </Button>
+            </div>
+          </div>
+        ) : null}
+
         <StepProgress steps={STEP_LABELS} current={step} onSelect={setStep} />
 
         <div key={step} className="animate-rise mt-8">
@@ -575,22 +772,39 @@ function Montar() {
           {step === 0 ? (
             <StepShell
               title="Escolha o tamanho"
-              subtitle="O tamanho define quantos ingredientes você leva sem custo."
+              subtitle={
+                isDailyPasta
+                  ? "Preços promocionais especiais da Massa do Dia! (Ingredientes e molhos fixos)"
+                  : "O tamanho define quantos ingredientes você leva sem custo (extras + R$ 1,00)."
+              }
             >
-              <div className="grid gap-4 sm:grid-cols-2">
-                {SIZES.map((s) => (
-                  <OptionCard
-                    key={s.id}
-                    title={s.label.toUpperCase()}
-                    description={`Até ${s.limit} adicionais inclusos`}
-                    price={brl(s.price)}
-                    selected={size === s.id}
-                    onClick={() => {
-                      setSize(s.id);
-                      setIngredients((prev) => prev.slice(0, s.limit));
-                    }}
-                  />
-                ))}
+              <div className="grid gap-4 sm:grid-cols-3">
+                {SIZES.map((s) => {
+                  const displayPrice = isDailyPasta
+                    ? s.id === "kids"
+                      ? 19.99
+                      : s.id === "pequeno"
+                        ? 24.0
+                        : 27.0
+                    : s.price;
+                  const displayDesc = isDailyPasta
+                    ? "Porção especial da Massa do Dia (receita original)"
+                    : (s.desc || `Até ${s.limit} adicionais inclusos (extras + R$ 1,00)`);
+
+                  return (
+                    <OptionCard
+                      key={s.id}
+                      title={s.label.toUpperCase()}
+                      description={displayDesc}
+                      price={brl(displayPrice)}
+                      selected={size === s.id}
+                      badge={isDailyPasta ? "PROMO DIA!" : s.badge}
+                      onClick={() => {
+                        setSize(s.id);
+                      }}
+                    />
+                  );
+                })}
               </div>
             </StepShell>
           ) : null}
@@ -634,13 +848,21 @@ function Montar() {
           {step === 2 ? (
             <StepShell
               title="Escolha o molho da sua massa"
-              subtitle="Escolha um molho tradicional ou combine exatamente 2 molhos especiais no misturado (+ R$ 2,00)."
+              subtitle={
+                isFixedSauceDailyPasta
+                  ? "O molho da Massa do Dia de hoje é fixo pela receita original."
+                  : isSundayDailyPasta
+                    ? "Massa de Domingo: O molho é à sua escolha! Selecione a opção desejada."
+                    : "Escolha um molho tradicional ou combine exatamente 2 molhos especiais no misturado (+ R$ 2,00)."
+              }
               badge={
-                sauceMode === "Misturado"
-                  ? `${sauces.length} / 2 molhos selecionados`
-                  : sauceMode
-                    ? sauceMode
-                    : "Escolha uma opção"
+                isFixedSauceDailyPasta
+                  ? `Molho Fixo 🔒 (${sauceMode === "Misturado" ? `Misturado: ${sauces.join(" + ")}` : sauceMode})`
+                  : sauceMode === "Misturado"
+                    ? `${sauces.length} / 2 molhos selecionados`
+                    : sauceMode
+                      ? sauceMode
+                      : "Escolha uma opção"
               }
             >
               <div className="grid gap-3 sm:grid-cols-2">
@@ -656,7 +878,14 @@ function Montar() {
                         {...(isMisturadoOption ? { price: `+ ${brl(MIXED_SAUCE_PRICE)}` } : {})}
                         selected={isSelected}
                         disabled={isUnavailable}
+                        badge={s.badge}
                         onClick={() => {
+                          if (isFixedSauceDailyPasta && s.id !== sauceMode) {
+                            toast.info("🔒 Molho fixo", {
+                              description: "O molho da Massa do Dia de hoje é fixo. (Apenas na Massa de Domingo o molho é à escolha).",
+                            });
+                            return;
+                          }
                           if (isUnavailable) {
                             toast.error("Molho indisponível", {
                               description: `${s.id} está temporariamente esgotado.`,
@@ -697,7 +926,9 @@ function Montar() {
                         🥣 Selecione os 2 molhos para misturar
                       </p>
                       <p className="text-xs text-muted-foreground mt-0.5">
-                        Escolha exatamente 2 opções para compor seu molho misturado (+ {brl(MIXED_SAUCE_PRICE)}).
+                        {isFixedSauceDailyPasta
+                          ? "Molhos mistos fixados da receita de hoje da Massa do Dia."
+                          : `Escolha exatamente 2 opções para compor seu molho misturado (+ ${brl(MIXED_SAUCE_PRICE)}).`}
                       </p>
                     </div>
                     <span
@@ -712,7 +943,7 @@ function Montar() {
                     </span>
                   </div>
 
-                  <div className="mt-4 grid gap-3 sm:grid-cols-3">
+                  <div className="mt-4 grid gap-3 grid-cols-2 lg:grid-cols-4">
                     {BASE_MIXABLE_SAUCES.map((b) => {
                       const isUnavailable = unavailableIngredients.includes(b.id);
                       const isPicked = sauces.includes(b.id);
@@ -722,6 +953,12 @@ function Montar() {
                             type="button"
                             disabled={isUnavailable}
                             onClick={() => {
+                              if (isFixedSauceDailyPasta) {
+                                toast.info("🔒 Molho fixo", {
+                                  description: "Os molhos da receita da Massa do Dia de hoje são fixos.",
+                                });
+                                return;
+                              }
                               if (isUnavailable) {
                                 toast.error("Molho indisponível", {
                                   description: `${b.id} está temporariamente esgotado.`,
@@ -749,6 +986,11 @@ function Montar() {
                               isUnavailable && "cursor-not-allowed opacity-40 hover:border-border hover:bg-secondary/50",
                             )}
                           >
+                            {b.badge ? (
+                              <span className="absolute -top-2 left-2 z-10 rounded-full bg-gradient-to-r from-red-600 to-amber-500 px-1.5 py-0.5 text-[8px] font-black uppercase text-white shadow-md">
+                                {b.badge}
+                              </span>
+                            ) : null}
                             <div className="flex items-center justify-between">
                               <span className="font-semibold text-sm">{b.id}</span>
                               <span
@@ -794,8 +1036,16 @@ function Montar() {
           {step === 3 ? (
             <StepShell
               title="Escolha seus ingredientes"
-              subtitle="Todos inclusos no preço, dentro do limite do tamanho."
-              badge={`${ingredients.length} / ${limit} ingredientes`}
+              subtitle={
+                isDailyPasta
+                  ? "Ingredientes originais da Massa do Dia são fixos. Adicionais extras + R$ 1,00 cada."
+                  : `Ingredientes inclusos até o limite do tamanho (${sizeLimit}). Adicionais extras + R$ 1,00 cada.`
+              }
+              badge={
+                isDailyPasta
+                  ? `${ingredients.length} ingrediente(s) ${extraIngredientsCount > 0 ? `(+ ${brl(extraIngredientsFee)})` : "(receita original)"}`
+                  : `${ingredients.length} selecionado(s) ${extraIngredientsCount > 0 ? `(+ ${brl(extraIngredientsFee)})` : `(${ingredients.length}/${sizeLimit} inclusos)`}`
+              }
             >
               <div className="grid grid-cols-2 gap-3 sm:grid-cols-3 lg:grid-cols-4">
                 {INGREDIENTS.map((i) => {
@@ -807,10 +1057,7 @@ function Montar() {
                         emoji={i.emoji}
                         title={i.id}
                         selected={ingredients.includes(i.id)}
-                        disabled={
-                          isUnavailable ||
-                          (!ingredients.includes(i.id) && ingredients.length >= limit)
-                        }
+                        disabled={isUnavailable}
                         onClick={() => toggleIngredient(i.id)}
                       />
                       {isUnavailable ? (
@@ -890,20 +1137,23 @@ function Montar() {
           {step === 6 ? (
             <StepShell
               title="Finalização e Identificação"
-              subtitle="Escolha os toques finais e informe obrigatoriamente de quem é este prato."
+              subtitle="Escolha até 3 opções de finalização e informe obrigatoriamente de quem é este prato."
               badge={`${finishing.length} / 3 selecionadas`}
             >
               <div className="grid grid-cols-2 gap-3 sm:grid-cols-3">
                 {FINISHINGS.map((f) => {
                   const isUnavailable = unavailableIngredients.includes(f.id);
+                  const isSelected = finishing.includes(f.id);
+                  const isLimitReached = !isSelected && finishing.length >= 3;
                   return (
                     <div key={f.id} className="relative">
                       <OptionCard
                         compact
                         emoji={f.emoji}
                         title={f.id}
-                        selected={finishing.includes(f.id)}
-                        disabled={isUnavailable}
+                        selected={isSelected}
+                        disabled={isUnavailable || isLimitReached}
+                        badge={f.badge}
                         onClick={() => {
                           if (isUnavailable) {
                             toast.error("Finalização indisponível", {
@@ -911,13 +1161,17 @@ function Montar() {
                             });
                             return;
                           }
-                          setFinishing((prev) =>
-                            prev.includes(f.id)
-                              ? prev.filter((x) => x !== f.id)
-                              : prev.length >= 3
-                                ? prev
-                                : [...prev, f.id],
-                          );
+                          if (isSelected) {
+                            setFinishing((prev) => prev.filter((x) => x !== f.id));
+                          } else {
+                            if (finishing.length >= 3) {
+                              toast.error("Limite atingido", {
+                                description: "Você pode escolher no máximo 3 opções de finalização. Desmarque uma para escolher outra.",
+                              });
+                              return;
+                            }
+                            setFinishing((prev) => [...prev, f.id]);
+                          }
                         }}
                       />
                       {isUnavailable ? (
@@ -1389,7 +1643,7 @@ function Montar() {
                   <div key={idx} className="panel divide-y divide-border/70 relative">
                     <div className="p-4 bg-gold/5 font-bold text-gold border-b border-border/70 flex justify-between items-center">
                       <span>
-                        Massa {idx + 1} — {item.massaLabel}
+                        Massa {idx + 1} — {item.massaLabel} {item.isDailyPasta ? "(Massa do Dia 🍝)" : ""}
                       </span>
                       <span>{brl(item.total)}</span>
                     </div>
@@ -1401,6 +1655,13 @@ function Montar() {
                       extra={item.isMixedSauce ? `+ ${brl(MIXED_SAUCE_PRICE)}` : undefined}
                     />
                     <SummaryRow label="Ingredientes" list={item.ingredients} />
+                    {item.extraIngredientsFee && item.extraIngredientsFee > 0 ? (
+                      <SummaryRow
+                        label="Extras (Ingredientes)"
+                        value={`${Math.round(item.extraIngredientsFee / 1.0)} extra(s)`}
+                        extra={`+ ${brl(item.extraIngredientsFee)}`}
+                      />
+                    ) : null}
                     {item.shrimp && (
                       <SummaryRow label="Camarão" value="Sim" extra={`+ ${brl(SHRIMP_PRICE)}`} />
                     )}
@@ -1413,14 +1674,14 @@ function Montar() {
                   <div className="panel divide-y divide-border/70 relative border-gold/50 shadow-gold/10 shadow-lg">
                     <div className="p-4 bg-gold/10 font-bold text-gold border-b border-border/70 flex justify-between items-center">
                       <span>
-                        Massa {cartItems.length + 1} — {massaLabel || "Atual"}
+                        Massa {cartItems.length + 1} — {massaLabel || "Atual"} {isDailyPasta ? "(Massa do Dia 🍝)" : ""}
                       </span>
                       <span>{brl(currentTotal)}</span>
                     </div>
                     <SummaryRow
                       label="Tamanho"
                       value={info?.label ?? "-"}
-                      extra={brl(info?.price ?? 0)}
+                      extra={brl(baseSizePrice)}
                     />
                     <SummaryRow label="Massa" value={pasta ?? "-"} />
                     <SummaryRow
@@ -1433,6 +1694,13 @@ function Montar() {
                       extra={sauceMode === "Misturado" ? `+ ${brl(MIXED_SAUCE_PRICE)}` : undefined}
                     />
                     <SummaryRow label="Ingredientes" list={ingredients} />
+                    {extraIngredientsFee > 0 ? (
+                      <SummaryRow
+                        label="Extras (Ingredientes)"
+                        value={`${extraIngredientsCount} extra(s)`}
+                        extra={`+ ${brl(extraIngredientsFee)}`}
+                      />
+                    ) : null}
                     {shrimp && (
                       <SummaryRow label="Camarão" value="Sim" extra={`+ ${brl(SHRIMP_PRICE)}`} />
                     )}
@@ -1610,7 +1878,7 @@ function Montar() {
             <p className="font-display text-xl font-bold text-gold">{brl(finalTotal)}</p>
           </div>
           {step < STEP_LABELS.length - 1 ? (
-            <Button variant="gold" size="lg" onClick={next} disabled={!canAdvance}>
+            <Button variant="gold" size="lg" onClick={next}>
               Continuar <ArrowRight />
             </Button>
           ) : null}

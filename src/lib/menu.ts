@@ -1,8 +1,9 @@
-export type SizeId = "pequeno" | "grande";
+export type SizeId = "kids" | "pequeno" | "grande";
 
-export const SIZES: { id: SizeId; label: string; price: number; limit: number }[] = [
-  { id: "pequeno", label: "Pequeno", price: 24, limit: 6 },
-  { id: "grande", label: "Grande", price: 27, limit: 8 },
+export const SIZES: { id: SizeId; label: string; price: number; limit: number; badge?: string; desc?: string }[] = [
+  { id: "kids", label: "Massa Kids (PP)", price: 19.99, limit: 3, badge: "NOVIDADE!", desc: "Porção especial para os pequenos (3 ingredientes)" },
+  { id: "pequeno", label: "Pequeno", price: 26, limit: 6, desc: "Porção individual tradicional (6 ingredientes)" },
+  { id: "grande", label: "Grande", price: 29, limit: 8, desc: "Porção reforçada (8 ingredientes)" },
 ];
 
 export const SHRIMP_PRICE = 10;
@@ -25,17 +26,18 @@ export const PASTAS = [
   { id: "Espaguete", desc: "O fio tradicional que todo mundo ama" },
 ];
 
-export const BASE_MIXABLE_SAUCES = [
+export const BASE_MIXABLE_SAUCES: { id: string; desc: string; badge?: string }[] = [
   { id: "Molho Branco", desc: "Cremoso, delicado e aveludado" },
   { id: "Bolonhesa", desc: "Carne moída apurada no tomate" },
   { id: "Ao Sugo", desc: "Tomate fresco, alho e manjericão" },
+  { id: "Alho e Óleo", desc: "Clássico leve e aromático com alho dourado e azeite", badge: "NOVO!" },
 ];
 
 export const SAUCES = [
   { id: "Molho Branco", desc: "Cremoso, delicado e aveludado" },
   { id: "Bolonhesa", desc: "Carne moída apurada no tomate" },
   { id: "Ao Sugo", desc: "Tomate fresco, alho e manjericão" },
-  { id: "Alho e Óleo", desc: "Clássico leve e aromático com alho dourado e azeite (opção única)" },
+  { id: "Alho e Óleo", desc: "Clássico leve e aromático com alho dourado e azeite", badge: "NOVO!" },
   { id: "Misturado", desc: "Escolha exatamente 2 molhos para misturar (+ R$ 2,00)" },
 ];
 
@@ -67,13 +69,15 @@ export const SAUTES = [
   { id: "No azeite", emoji: "🫗", desc: "Leve, aromático e italiano" },
 ];
 
-export const FINISHINGS = [
+export const FINISHINGS: { id: string; emoji: string; badge?: string }[] = [
   { id: "Queijo ralado", emoji: "🧀" },
   { id: "Orégano", emoji: "🌿" },
   { id: "Manjericão", emoji: "🌱" },
   { id: "Alho frito", emoji: "🧄" },
   { id: "Pimenta calabresa", emoji: "🌶️" },
   { id: "Azeite", emoji: "🫒" },
+  { id: "Molho de alho", emoji: "🧄", badge: "NOVO!" },
+  { id: "Molho de chimichurri", emoji: "🌿", badge: "NOVO!" },
 ];
 
 // --- BEBIDAS ---
@@ -278,6 +282,96 @@ export const STATUS_FLOW = [
 ] as const;
 
 export type OrderStatus = (typeof STATUS_FLOW)[number]["id"];
+
+export type DailyPasta = {
+  dayOfWeek: number;
+  dayName: string;
+  emoji: string;
+  title: string;
+  pasta: string;
+  sauce: string;
+  ingredients: string[];
+  prices: {
+    kids: number;
+    pequeno: number;
+    grande: number;
+  };
+  desc: string;
+};
+
+export const DAILY_PASTAS: DailyPasta[] = [
+  {
+    dayOfWeek: 2,
+    dayName: "TERÇA-FEIRA",
+    emoji: "🍅",
+    title: "Espaguete à Bolonhesa",
+    pasta: "Espaguete",
+    sauce: "Bolonhesa",
+    ingredients: ["Carne seca", "Queijo mussarela", "Queijo parmesão", "Cebola"],
+    prices: { kids: 19.99, pequeno: 24.0, grande: 27.0 },
+    desc: "Molho bolonhesa + carne seca + mussarela + parmesão + cebola",
+  },
+  {
+    dayOfWeek: 3,
+    dayName: "QUARTA-FEIRA",
+    emoji: "🧀",
+    title: "Penne 4 Queijos",
+    pasta: "Penne",
+    sauce: "Molho Branco",
+    ingredients: ["Queijo mussarela", "Queijo branco", "Queijo parmesão", "Peito de peru"],
+    prices: { kids: 19.99, pequeno: 24.0, grande: 27.0 },
+    desc: "Molho branco + mussarela + queijo branco + parmesão + peito de peru",
+  },
+  {
+    dayOfWeek: 4,
+    dayName: "QUINTA-FEIRA",
+    emoji: "🍗",
+    title: "Talharim com Frango",
+    pasta: "Talharim",
+    sauce: "Molho Branco",
+    ingredients: ["Frango", "Brócolis", "Milho", "Queijo mussarela"],
+    prices: { kids: 19.99, pequeno: 24.0, grande: 27.0 },
+    desc: "Molho branco + frango + brócolis + milho + mussarela",
+  },
+  {
+    dayOfWeek: 5,
+    dayName: "SEXTA-FEIRA",
+    emoji: "🥓",
+    title: "Penne com Bacon e Molho Branco",
+    pasta: "Penne",
+    sauce: "Molho Branco",
+    ingredients: ["Bacon", "Milho", "Queijo mussarela", "Alho-poró"],
+    prices: { kids: 19.99, pequeno: 24.0, grande: 27.0 },
+    desc: "Molho branco + bacon + milho + mussarela + alho-poró",
+  },
+  {
+    dayOfWeek: 6,
+    dayName: "SÁBADO",
+    emoji: "🍝",
+    title: "Especial da Casa",
+    pasta: "Talharim",
+    sauce: "Misturado",
+    ingredients: ["Calabresa", "Bacon", "Palmito", "Queijo mussarela"],
+    prices: { kids: 19.99, pequeno: 24.0, grande: 27.0 },
+    desc: "Molho misto + calabresa + bacon + palmito + mussarela",
+  },
+  {
+    dayOfWeek: 0,
+    dayName: "DOMINGO",
+    emoji: "❤️",
+    title: "Massa da Família",
+    pasta: "Penne",
+    sauce: "Ao Sugo",
+    ingredients: ["Frango", "Presunto", "Milho", "Queijo mussarela"],
+    prices: { kids: 19.99, pequeno: 24.0, grande: 27.0 },
+    desc: "Molho à escolha + frango + presunto + milho + mussarela",
+  },
+];
+
+export function getTodayDailyPasta(): DailyPasta | null {
+  const day = new Date().getDay();
+  return DAILY_PASTAS.find((dp) => dp.dayOfWeek === day) ?? null;
+}
 
 export function sizeInfo(size: SizeId | null) {
   return SIZES.find((s) => s.id === size) ?? null;

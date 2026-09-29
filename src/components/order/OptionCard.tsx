@@ -11,6 +11,7 @@ export function OptionCard({
   disabled,
   onClick,
   compact,
+  badge,
 }: {
   title: string;
   description?: string;
@@ -20,6 +21,7 @@ export function OptionCard({
   disabled?: boolean;
   onClick: () => void;
   compact?: boolean;
+  badge?: string;
 }) {
   return (
     <button
@@ -37,6 +39,11 @@ export function OptionCard({
         compact && "items-center gap-2 p-3 text-center",
       )}
     >
+      {badge ? (
+        <span className="absolute -top-2 left-3 z-10 rounded-full bg-gradient-to-r from-red-600 to-amber-500 px-2 py-0.5 text-[10px] font-black uppercase text-white shadow-md">
+          {badge}
+        </span>
+      ) : null}
       <span
         className={cn(
           "absolute top-3 right-3 flex size-6 items-center justify-center rounded-full border transition-colors",

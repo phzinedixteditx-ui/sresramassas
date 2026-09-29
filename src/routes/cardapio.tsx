@@ -8,6 +8,7 @@ import { supabase } from "@/integrations/supabase/client";
 import {
   BEVERAGE_CATEGORIES,
   brl,
+  DAILY_PASTAS,
   DESSERT_ITEMS,
   FINISHINGS,
   INGREDIENTS,
@@ -109,10 +110,71 @@ function Cardapio() {
           </h1>
         </header>
 
+        {/* SEÇÃO NOVIDADE: MASSA DO DIA */}
+        <section className="animate-rise rounded-3xl border border-gold/40 bg-gradient-to-br from-gold/15 via-gold/5 to-background p-6 md:p-8 shadow-xl">
+          <div className="flex flex-col items-start justify-between gap-4 md:flex-row md:items-center">
+            <div>
+              <span className="inline-block rounded-full bg-gradient-to-r from-red-600 to-amber-500 px-3 py-1 text-xs font-black uppercase text-white shadow">
+                🔥 NOVO — PORÇÃO ESPECIAL
+              </span>
+              <h2 className="mt-2 font-display text-2xl font-bold text-foreground md:text-3xl">
+                🍝 MASSA DO DIA
+              </h2>
+              <p className="text-sm text-muted-foreground mt-1">
+                Uma combinação especial preparada para cada dia da semana! (Segunda-feira: Fechado)
+              </p>
+            </div>
+            <div className="rounded-2xl border border-gold/40 bg-background/80 px-4 py-3 text-right">
+              <p className="text-[11px] font-bold text-gold uppercase tracking-wider">Preços por tamanho</p>
+              <p className="font-display text-sm font-bold text-foreground">
+                PP/Kids: <span className="text-gold">{brl(19.99)}</span> | Pequena: <span className="text-gold">{brl(24)}</span> | Grande: <span className="text-gold">{brl(27)}</span>
+              </p>
+            </div>
+          </div>
+
+          <div className="mt-6 grid gap-4 sm:grid-cols-2 lg:grid-cols-3">
+            {DAILY_PASTAS.map((dp) => {
+              const isToday = new Date().getDay() === dp.dayOfWeek;
+              return (
+                <div
+                  key={dp.dayOfWeek}
+                  className={`relative flex flex-col justify-between rounded-2xl border p-5 transition-all ${
+                    isToday
+                      ? "border-gold bg-gold/15 shadow-gold ring-1 ring-gold"
+                      : "border-border bg-secondary/40"
+                  }`}
+                >
+                  {isToday ? (
+                    <span className="absolute -top-2.5 right-4 rounded-full bg-gold px-2.5 py-0.5 text-[10px] font-extrabold uppercase text-primary-foreground shadow">
+                      HOJE ⭐
+                    </span>
+                  ) : null}
+                  <div>
+                    <div className="flex items-center justify-between border-b border-border/60 pb-2">
+                      <span className="text-xs font-bold text-gold uppercase tracking-wider">{dp.dayName}</span>
+                      <span className="text-2xl">{dp.emoji}</span>
+                    </div>
+                    <h3 className="mt-3 font-display text-lg font-bold text-foreground">{dp.title}</h3>
+                    <p className="mt-1 text-xs text-muted-foreground leading-relaxed">{dp.desc}</p>
+                  </div>
+                  <div className="mt-4 pt-3 border-t border-border/40 text-xs font-medium text-foreground/80">
+                    <span className="text-gold font-bold">Massa:</span> {dp.pasta} • <span className="text-gold font-bold">Molho:</span> {dp.sauce}
+                  </div>
+                </div>
+              );
+            })}
+          </div>
+        </section>
+
         <Section index="1" title="Tamanhos">
-          <div className="grid gap-4 sm:grid-cols-2">
+          <div className="grid gap-4 sm:grid-cols-3">
             {SIZES.map((s) => (
-              <div key={s.id} className="rounded-2xl border border-border bg-secondary/40 p-5">
+              <div key={s.id} className="relative rounded-2xl border border-border bg-secondary/40 p-5">
+                {s.badge ? (
+                  <span className="absolute -top-2.5 left-4 rounded-full bg-gradient-to-r from-red-600 to-amber-500 px-2.5 py-0.5 text-[10px] font-black uppercase text-white shadow-md">
+                    {s.badge}
+                  </span>
+                ) : null}
                 <p className="font-display text-lg font-bold text-foreground uppercase">{s.label}</p>
                 <p className="font-display text-3xl font-bold text-gold">{brl(s.price)}</p>
                 <p className="mt-1 text-sm text-muted-foreground">
@@ -171,13 +233,20 @@ function Cardapio() {
                   }`}
                 >
                   <div className="flex items-center justify-between">
-                    <p
-                      className={`font-semibold ${
-                        isUnavailable ? "line-through text-muted-foreground" : "text-foreground"
-                      }`}
-                    >
-                      {s.id}
-                    </p>
+                    <div className="flex items-center gap-2">
+                      <p
+                        className={`font-semibold ${
+                          isUnavailable ? "line-through text-muted-foreground" : "text-foreground"
+                        }`}
+                      >
+                        {s.id}
+                      </p>
+                      {s.badge ? (
+                        <span className="rounded-full bg-gradient-to-r from-red-600 to-amber-500 px-2 py-0.5 text-[9px] font-extrabold uppercase text-white shadow">
+                          {s.badge}
+                        </span>
+                      ) : null}
+                    </div>
                     <div className="flex items-center gap-2">
                       {s.id === "Misturado" && (
                         <span className="rounded-md border border-gold/40 bg-gold/10 px-2 py-0.5 font-display text-xs font-bold text-gold">
@@ -293,6 +362,11 @@ function Cardapio() {
                     >
                       {f.id}
                     </span>
+                    {f.badge ? (
+                      <span className="rounded-full bg-gradient-to-r from-red-600 to-amber-500 px-1.5 py-0.5 text-[8px] font-black uppercase text-white shadow shrink-0">
+                        {f.badge}
+                      </span>
+                    ) : null}
                   </div>
                   {isUnavailable ? (
                     <span className="rounded bg-red-600/80 px-1.5 py-0.5 text-[9px] font-bold text-white uppercase shrink-0">

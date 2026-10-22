@@ -18,7 +18,7 @@ export function whatsappLink(phone: string, message?: string) {
   return `https://wa.me/${withDdi}${message ? `?text=${encodeURIComponent(message)}` : ""}`;
 }
 
-export const MIXED_SAUCE_PRICE = 2;
+export const MIXED_SAUCE_PRICE = 0;
 
 export const PASTAS = [
   { id: "Penne", desc: "Tubos curtos, perfeitos para molhos encorpados" },
@@ -38,7 +38,7 @@ export const SAUCES = [
   { id: "Bolonhesa", desc: "Carne moída apurada no tomate" },
   { id: "Ao Sugo", desc: "Tomate fresco, alho e manjericão" },
   { id: "Alho e Óleo", desc: "Clássico leve e aromático com alho dourado e azeite", badge: "NOVO!" },
-  { id: "Misturado", desc: "Escolha exatamente 2 molhos para misturar (+ R$ 2,00)" },
+  { id: "Misturado", desc: "Escolha exatamente 2 molhos para misturar" },
 ];
 
 export const INGREDIENTS: { id: string; emoji: string }[] = [

@@ -12,18 +12,19 @@ import {
   DESSERT_ITEMS,
   FINISHINGS,
   INGREDIENTS,
-  MIXED_SAUCE_PRICE,
   PASTAS,
   SAUCES,
   SAUTES,
   SHRIMP_PRICE,
   SIZES,
 } from "@/lib/menu";
-import { fetchUnavailableIngredients, getStoredUnavailableIngredients } from "@/lib/stock";
+import { subscribeToStock } from "@/lib/stock";
 
 export const Route = createFileRoute("/cardapio")({
   head: () => ({
     meta: [
+      { property: "og:type", content: "website" },
+      { name: "twitter:card", content: "summary" },
       { title: "Cardápio — Sr e Sra Massas" },
       {
         name: "description",
@@ -65,39 +66,7 @@ function Section({
 function Cardapio() {
   const [unavailableIngredients, setUnavailableIngredients] = useState<string[]>([]);
 
-  useEffect(() => {
-    setUnavailableIngredients(getStoredUnavailableIngredients());
-    void fetchUnavailableIngredients().then((list) => {
-      setUnavailableIngredients(list);
-    });
-
-    const channel = supabase
-      .channel("stock-realtime-cardapio")
-      .on(
-        "postgres_changes",
-        { event: "*", schema: "public", table: "stock_settings" },
-        (payload) => {
-          const row = payload.new as { unavailable_items?: string[] } | undefined;
-          if (row?.unavailable_items) {
-            setUnavailableIngredients(row.unavailable_items);
-            if (typeof window !== "undefined") {
-              localStorage.setItem("sresramassas_unavailable_ingredients", JSON.stringify(row.unavailable_items));
-            }
-          }
-        },
-      )
-      .on("broadcast", { event: "stock_update" }, (payload: { [key: string]: unknown }) => {
-        const data = payload["payload"] as { unavailable?: string[] } | undefined;
-        if (data?.unavailable) {
-          setUnavailableIngredients(data.unavailable);
-        }
-      })
-      .subscribe();
-
-    return () => {
-      void supabase.removeChannel(channel);
-    };
-  }, []);
+  useEffect(() => subscribeToStock("stock-realtime-cardapio", setUnavailableIngredients), []);
 
   return (
     <div className="min-h-screen bg-background">
@@ -248,11 +217,6 @@ function Cardapio() {
                       ) : null}
                     </div>
                     <div className="flex items-center gap-2">
-                      {s.id === "Misturado" && (
-                        <span className="rounded-md border border-gold/40 bg-gold/10 px-2 py-0.5 font-display text-xs font-bold text-gold">
-                          + {brl(MIXED_SAUCE_PRICE)}
-                        </span>
-                      )}
                       {isUnavailable ? (
                         <span className="rounded bg-red-600/80 px-1.5 py-0.5 text-[9px] font-bold text-white uppercase">
                           Esgotado

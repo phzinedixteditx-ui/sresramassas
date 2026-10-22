@@ -22,7 +22,6 @@ import {
   FINISHINGS,
   getTodayDailyPasta,
   INGREDIENTS,
-  MIXED_SAUCE_PRICE,
   PASTAS,
   PAYMENT_METHODS,
   PaymentMethod,
@@ -35,12 +34,14 @@ import {
   type SizeId,
   whatsappLink,
 } from "@/lib/menu";
-import { fetchUnavailableIngredients, getStoredUnavailableIngredients } from "@/lib/stock";
+import { subscribeToStock } from "@/lib/stock";
 
 export const Route = createFileRoute("/montar")({
   ssr: false,
   head: () => ({
     meta: [
+      { property: "og:type", content: "website" },
+      { name: "twitter:card", content: "summary" },
       { title: "Monte sua massa — Sr e Sra Massas" },
       {
         name: "description",
@@ -157,39 +158,7 @@ function Montar() {
   }
 
   // Carrega e escuta estoque em tempo real
-  useEffect(() => {
-    setUnavailableIngredients(getStoredUnavailableIngredients());
-    void fetchUnavailableIngredients().then((list) => {
-      setUnavailableIngredients(list);
-    });
-
-    const channel = supabase
-      .channel("stock-realtime-montar")
-      .on(
-        "postgres_changes",
-        { event: "*", schema: "public", table: "stock_settings" },
-        (payload) => {
-          const row = payload.new as { unavailable_items?: string[] } | undefined;
-          if (row?.unavailable_items) {
-            setUnavailableIngredients(row.unavailable_items);
-            if (typeof window !== "undefined") {
-              localStorage.setItem("sresramassas_unavailable_ingredients", JSON.stringify(row.unavailable_items));
-            }
-          }
-        },
-      )
-      .on("broadcast", { event: "stock_update" }, (payload: { [key: string]: unknown }) => {
-        const payloadData = payload["payload"] as { unavailable?: string[] } | undefined;
-        if (payloadData?.unavailable) {
-          setUnavailableIngredients(payloadData.unavailable);
-        }
-      })
-      .subscribe();
-
-    return () => {
-      void supabase.removeChannel(channel);
-    };
-  }, []);
+  useEffect(() => subscribeToStock("stock-realtime-montar", setUnavailableIngredients), []);
 
   const info = sizeInfo(size);
   const sizeLimit = info?.limit ?? 0;
@@ -213,8 +182,7 @@ function Montar() {
 
   const extraIngredientsFee = extraIngredientsCount * 1.0;
   const isMixedSauce = sauceMode === "Misturado";
-  const mixedSauceFee = isMixedSauce ? MIXED_SAUCE_PRICE : 0;
-  const currentTotal = baseSizePrice + extraIngredientsFee + (shrimp ? SHRIMP_PRICE : 0) + mixedSauceFee;
+  const currentTotal = baseSizePrice + extraIngredientsFee + (shrimp ? SHRIMP_PRICE : 0);
 
   const cartTotal = cartItems.reduce((acc, item) => acc + item.total, 0);
 
@@ -853,7 +821,7 @@ function Montar() {
                   ? "O molho da Massa do Dia de hoje é fixo pela receita original."
                   : isSundayDailyPasta
                     ? "Massa de Domingo: O molho é à sua escolha! Selecione a opção desejada."
-                    : "Escolha um molho tradicional ou combine exatamente 2 molhos especiais no misturado (+ R$ 2,00)."
+                    : "Escolha um molho tradicional ou combine exatamente 2 molhos especiais no misturado."
               }
               badge={
                 isFixedSauceDailyPasta
@@ -875,7 +843,6 @@ function Montar() {
                       <OptionCard
                         title={s.id}
                         description={s.desc}
-                        {...(isMisturadoOption ? { price: `+ ${brl(MIXED_SAUCE_PRICE)}` } : {})}
                         selected={isSelected}
                         disabled={isUnavailable}
                         badge={s.badge}
@@ -928,7 +895,7 @@ function Montar() {
                       <p className="text-xs text-muted-foreground mt-0.5">
                         {isFixedSauceDailyPasta
                           ? "Molhos mistos fixados da receita de hoje da Massa do Dia."
-                          : `Escolha exatamente 2 opções para compor seu molho misturado (+ ${brl(MIXED_SAUCE_PRICE)}).`}
+                          : "Escolha exatamente 2 opções para compor seu molho misturado."}
                       </p>
                     </div>
                     <span
@@ -1020,7 +987,7 @@ function Montar() {
 
                   {sauces.length === 2 ? (
                     <p className="mt-3.5 text-xs font-medium text-emerald-400 flex items-center gap-1.5">
-                      ✓ Mistura selecionada: <strong>{sauces.join(" + ")}</strong> (+ {brl(MIXED_SAUCE_PRICE)})
+                      ✓ Mistura selecionada: <strong>{sauces.join(" + ")}</strong>
                     </p>
                   ) : (
                     <p className="mt-3.5 text-xs text-amber-400">
@@ -1652,7 +1619,6 @@ function Montar() {
                     <SummaryRow
                       label="Molho"
                       list={item.sauces}
-                      extra={item.isMixedSauce ? `+ ${brl(MIXED_SAUCE_PRICE)}` : undefined}
                     />
                     <SummaryRow label="Ingredientes" list={item.ingredients} />
                     {item.extraIngredientsFee && item.extraIngredientsFee > 0 ? (
@@ -1691,7 +1657,6 @@ function Montar() {
                           ? [`Misturado (${sauces.join(" + ")})`]
                           : sauces
                       }
-                      extra={sauceMode === "Misturado" ? `+ ${brl(MIXED_SAUCE_PRICE)}` : undefined}
                     />
                     <SummaryRow label="Ingredientes" list={ingredients} />
                     {extraIngredientsFee > 0 ? (

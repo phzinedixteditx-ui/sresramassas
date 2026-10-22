@@ -12,19 +12,23 @@ import {
   DESSERT_ITEMS,
   FINISHINGS,
   INGREDIENTS,
+  MIXED_SAUCE_PRICE,
   PASTAS,
   SAUCES,
   SAUTES,
   SHRIMP_PRICE,
   SIZES,
 } from "@/lib/menu";
-import { subscribeToStock } from "@/lib/stock";
+import {
+  fetchUnavailableIngredients,
+  getStoredUnavailableIngredients,
+  isItemUnavailable,
+  subscribeToStockRealtime,
+} from "@/lib/stock";
 
 export const Route = createFileRoute("/cardapio")({
   head: () => ({
     meta: [
-      { property: "og:type", content: "website" },
-      { name: "twitter:card", content: "summary" },
       { title: "Cardápio — Sr e Sra Massas" },
       {
         name: "description",
@@ -64,9 +68,23 @@ function Section({
 }
 
 function Cardapio() {
-  const [unavailableIngredients, setUnavailableIngredients] = useState<string[]>([]);
+  const [unavailableIngredients, setUnavailableIngredients] = useState<string[]>(
+    getStoredUnavailableIngredients,
+  );
 
-  useEffect(() => subscribeToStock("stock-realtime-cardapio", setUnavailableIngredients), []);
+  useEffect(() => {
+    void fetchUnavailableIngredients().then((list) => {
+      setUnavailableIngredients(list);
+    });
+
+    const unsubscribe = subscribeToStockRealtime("stock-realtime-cardapio", (list) => {
+      setUnavailableIngredients(list);
+    });
+
+    return () => {
+      unsubscribe();
+    };
+  }, []);
 
   return (
     <div className="min-h-screen bg-background">
@@ -157,7 +175,7 @@ function Cardapio() {
         <Section index="2" title="Tipos de massa">
           <div className="grid gap-3 sm:grid-cols-3">
             {PASTAS.map((p) => {
-              const isUnavailable = unavailableIngredients.includes(p.id);
+              const isUnavailable = isItemUnavailable(p.id, unavailableIngredients);
               return (
                 <div
                   key={p.id}
@@ -191,7 +209,7 @@ function Cardapio() {
         <Section index="3" title="Molhos">
           <div className="grid gap-3 sm:grid-cols-2">
             {SAUCES.map((s) => {
-              const isUnavailable = unavailableIngredients.includes(s.id);
+              const isUnavailable = isItemUnavailable(s.id, unavailableIngredients);
               return (
                 <div
                   key={s.id}
@@ -217,6 +235,11 @@ function Cardapio() {
                       ) : null}
                     </div>
                     <div className="flex items-center gap-2">
+                      {s.id === "Misturado" && MIXED_SAUCE_PRICE > 0 && (
+                        <span className="rounded-md border border-gold/40 bg-gold/10 px-2 py-0.5 font-display text-xs font-bold text-gold">
+                          + {brl(MIXED_SAUCE_PRICE)}
+                        </span>
+                      )}
                       {isUnavailable ? (
                         <span className="rounded bg-red-600/80 px-1.5 py-0.5 text-[9px] font-bold text-white uppercase">
                           Esgotado
@@ -234,7 +257,10 @@ function Cardapio() {
         <Section index="4" title="Ingredientes">
           <div className="grid grid-cols-2 gap-3 sm:grid-cols-3 lg:grid-cols-4">
             {INGREDIENTS.map((i) => {
-              const isUnavailable = unavailableIngredients.includes(i.id);
+              const isUnavailable = isItemUnavailable(
+                [i.id, i.id === "Azeitona comum" ? "Azeitona preta" : undefined],
+                unavailableIngredients,
+              );
               return (
                 <div
                   key={i.id}
@@ -273,7 +299,7 @@ function Cardapio() {
         <Section index="6" title="Refogado">
           <div className="grid gap-3 sm:grid-cols-2">
             {SAUTES.map((s) => {
-              const isUnavailable = unavailableIngredients.includes(s.id);
+              const isUnavailable = isItemUnavailable(s.id, unavailableIngredients);
               return (
                 <div
                   key={s.id}
@@ -307,7 +333,7 @@ function Cardapio() {
         <Section index="7" title="Finalização">
           <div className="grid grid-cols-2 gap-3 sm:grid-cols-3">
             {FINISHINGS.map((f) => {
-              const isUnavailable = unavailableIngredients.includes(f.id);
+              const isUnavailable = isItemUnavailable(f.id, unavailableIngredients);
               return (
                 <div
                   key={f.id}
@@ -368,10 +394,15 @@ function Cardapio() {
                   </div>
                   <div className="mt-2 flex flex-wrap gap-2">
                     {cat.items.map((item) => {
-                      const isUnavailable =
-                        unavailableIngredients.includes(item.id) ||
-                        unavailableIngredients.includes(item.name) ||
-                        unavailableIngredients.includes(`${cat.name} — ${item.name}`);
+                      const isUnavailable = isItemUnavailable(
+                        [
+                          item.id,
+                          item.name,
+                          `${cat.name} — ${item.name}`,
+                          `${cat.name} - ${item.name}`,
+                        ],
+                        unavailableIngredients,
+                      );
                       return (
                         <span
                           key={item.id}
@@ -425,9 +456,10 @@ function Cardapio() {
                       <div className="mt-1.5 flex flex-wrap gap-1.5">
                         {item.flavors.map((f) => {
                           const key = `${item.id}_${f}`;
-                          const isUnavailable =
-                            unavailableIngredients.includes(key) ||
-                            unavailableIngredients.includes(`${item.name} — ${f}`);
+                          const isUnavailable = isItemUnavailable(
+                            [key, `${item.name} — ${f}`, `${item.name} - ${f}`, f],
+                            unavailableIngredients,
+                          );
                           return (
                             <span
                               key={f}
@@ -447,9 +479,10 @@ function Cardapio() {
                 );
               }
 
-              const isUnavailable =
-                unavailableIngredients.includes(item.id) ||
-                unavailableIngredients.includes(item.name);
+              const isUnavailable = isItemUnavailable(
+                [item.id, item.name],
+                unavailableIngredients,
+              );
               return (
                 <div
                   key={item.id}

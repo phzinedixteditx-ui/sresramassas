@@ -22,6 +22,7 @@ import {
   FINISHINGS,
   getTodayDailyPasta,
   INGREDIENTS,
+  MIXED_SAUCE_PRICE,
   PASTAS,
   PAYMENT_METHODS,
   PaymentMethod,
@@ -34,14 +35,17 @@ import {
   type SizeId,
   whatsappLink,
 } from "@/lib/menu";
-import { subscribeToStock } from "@/lib/stock";
+import {
+  fetchUnavailableIngredients,
+  getStoredUnavailableIngredients,
+  isItemUnavailable,
+  subscribeToStockRealtime,
+} from "@/lib/stock";
 
 export const Route = createFileRoute("/montar")({
   ssr: false,
   head: () => ({
     meta: [
-      { property: "og:type", content: "website" },
-      { name: "twitter:card", content: "summary" },
       { title: "Monte sua massa — Sr e Sra Massas" },
       {
         name: "description",
@@ -158,7 +162,20 @@ function Montar() {
   }
 
   // Carrega e escuta estoque em tempo real
-  useEffect(() => subscribeToStock("stock-realtime-montar", setUnavailableIngredients), []);
+  useEffect(() => {
+    setUnavailableIngredients(getStoredUnavailableIngredients());
+    void fetchUnavailableIngredients().then((list) => {
+      setUnavailableIngredients(list);
+    });
+
+    const unsubscribe = subscribeToStockRealtime("stock-realtime-montar", (list) => {
+      setUnavailableIngredients(list);
+    });
+
+    return () => {
+      unsubscribe();
+    };
+  }, []);
 
   const info = sizeInfo(size);
   const sizeLimit = info?.limit ?? 0;
@@ -182,7 +199,8 @@ function Montar() {
 
   const extraIngredientsFee = extraIngredientsCount * 1.0;
   const isMixedSauce = sauceMode === "Misturado";
-  const currentTotal = baseSizePrice + extraIngredientsFee + (shrimp ? SHRIMP_PRICE : 0);
+  const mixedSauceFee = isMixedSauce ? MIXED_SAUCE_PRICE : 0;
+  const currentTotal = baseSizePrice + extraIngredientsFee + (shrimp ? SHRIMP_PRICE : 0) + mixedSauceFee;
 
   const cartTotal = cartItems.reduce((acc, item) => acc + item.total, 0);
 
@@ -226,23 +244,23 @@ function Montar() {
       case 0:
         return !!size;
       case 1:
-        return !!pasta && !unavailableIngredients.includes(pasta);
+        return !!pasta && !isItemUnavailable(pasta, unavailableIngredients);
       case 2:
         if (sauceMode === "Misturado") {
           return (
             sauces.length === 2 &&
-            !sauces.some((s) => unavailableIngredients.includes(s))
+            !sauces.some((s) => isItemUnavailable(s, unavailableIngredients))
           );
         }
         return (
           !!sauceMode &&
           sauces.length === 1 &&
-          !unavailableIngredients.includes(sauceMode)
+          !isItemUnavailable(sauceMode, unavailableIngredients)
         );
       case 3:
         return ingredients.length > 0;
       case 5:
-        return !!saute && !unavailableIngredients.includes(saute);
+        return !!saute && !isItemUnavailable(saute, unavailableIngredients);
       case 6:
         return massaLabel.trim().length >= 1;
       case 7: // Bebidas (opcional)
@@ -262,7 +280,7 @@ function Montar() {
   }, [step, size, pasta, sauceMode, sauces, ingredients, saute, massaLabel, customer, paymentMethod, unavailableIngredients]);
 
   function toggleIngredient(id: string) {
-    if (unavailableIngredients.includes(id)) {
+    if (isItemUnavailable([id, id === "Azeitona comum" ? "Azeitona preta" : undefined], unavailableIngredients)) {
       toast.error("⚠️ Ingrediente esgotado", {
         description: `${id} está temporariamente indisponível hoje.`,
       });
@@ -288,7 +306,7 @@ function Montar() {
   }
 
   function updateBeverageCount(itemId: string, delta: number) {
-    if (delta > 0 && unavailableIngredients.includes(itemId)) {
+    if (delta > 0 && isItemUnavailable(itemId, unavailableIngredients)) {
       toast.error("⚠️ Bebida esgotada", {
         description: "Esta bebida está temporariamente indisponível.",
       });
@@ -307,7 +325,7 @@ function Montar() {
   }
 
   function updateDessertCount(key: string, delta: number) {
-    if (delta > 0 && unavailableIngredients.includes(key)) {
+    if (delta > 0 && isItemUnavailable(key, unavailableIngredients)) {
       toast.error("⚠️ Doce esgotado", {
         description: "Este doce está temporariamente indisponível.",
       });
@@ -331,7 +349,7 @@ function Montar() {
         toast.error("Escolha o tamanho", { description: "Selecione o tamanho da massa para continuar." });
         return;
       }
-      if (step === 1 && (!pasta || unavailableIngredients.includes(pasta))) {
+      if (step === 1 && (!pasta || isItemUnavailable(pasta, unavailableIngredients))) {
         toast.error("Escolha a massa", { description: "Selecione o tipo de massa para continuar." });
         return;
       }
@@ -349,7 +367,7 @@ function Montar() {
         toast.error("Escolha os ingredientes", { description: "Selecione ao menos 1 ingrediente para continuar." });
         return;
       }
-      if (step === 5 && (!saute || unavailableIngredients.includes(saute))) {
+      if (step === 5 && (!saute || isItemUnavailable(saute, unavailableIngredients))) {
         toast.error("Escolha o refogado", { description: "Selecione como refogar sua massa para continuar." });
         return;
       }
@@ -516,9 +534,9 @@ function Montar() {
       const extraNotesParts: string[] = [];
       extraNotesParts.push(`[Para: ${item.massaLabel}]`);
       if (paymentMethod) {
-        const isCredit = paymentMethod === "cartao_credito";
+        const isCreditWithFee = paymentMethod === "cartao_credito" && CREDIT_CARD_FEE > 0;
         extraNotesParts.push(
-          `[Pagamento: ${paymentLabel}${isCredit ? ` (+ ${brl(CREDIT_CARD_FEE)} taxa da maquininha)` : ""}]`,
+          `[Pagamento: ${paymentLabel}${isCreditWithFee ? ` (+ ${brl(CREDIT_CARD_FEE)} taxa da maquininha)` : ""}]`,
         );
       }
       if (i === 0) {
@@ -618,7 +636,7 @@ function Montar() {
       ``,
       `*💳 FORMA DE PAGAMENTO*`,
       `${paymentLabel}`,
-      paymentMethod === "cartao_credito" ? `• Taxa maquininha (Crédito): ${brl(CREDIT_CARD_FEE)}` : null,
+      paymentMethod === "cartao_credito" && CREDIT_CARD_FEE > 0 ? `• Taxa maquininha (Crédito): ${brl(CREDIT_CARD_FEE)}` : null,
       ``,
       customer.orderType === "entrega" ? `*🛵 Taxa de entrega:* ${brl(7)}` : null,
       `*💰 TOTAL DO PEDIDO: ${brl(finalTotal)}*`,
@@ -782,7 +800,7 @@ function Montar() {
             <StepShell title="Escolha sua massa" subtitle="Uma opção por prato.">
               <div className="grid gap-3 sm:grid-cols-3">
                 {PASTAS.map((p) => {
-                  const isUnavailable = unavailableIngredients.includes(p.id);
+                  const isUnavailable = isItemUnavailable(p.id, unavailableIngredients);
                   return (
                     <div key={p.id} className="relative">
                       <OptionCard
@@ -835,7 +853,7 @@ function Montar() {
             >
               <div className="grid gap-3 sm:grid-cols-2">
                 {SAUCES.map((s) => {
-                  const isUnavailable = unavailableIngredients.includes(s.id);
+                  const isUnavailable = isItemUnavailable(s.id, unavailableIngredients);
                   const isSelected = sauceMode === s.id;
                   const isMisturadoOption = s.id === "Misturado";
                   return (
@@ -843,6 +861,7 @@ function Montar() {
                       <OptionCard
                         title={s.id}
                         description={s.desc}
+                        {...(isMisturadoOption && MIXED_SAUCE_PRICE > 0 ? { price: `+ ${brl(MIXED_SAUCE_PRICE)}` } : {})}
                         selected={isSelected}
                         disabled={isUnavailable}
                         badge={s.badge}
@@ -864,7 +883,7 @@ function Montar() {
                             setSauces((prev) => {
                               const valid = prev.filter((p) =>
                                 BASE_MIXABLE_SAUCES.some(
-                                  (b) => b.id === p && !unavailableIngredients.includes(b.id),
+                                  (b) => b.id === p && !isItemUnavailable(b.id, unavailableIngredients),
                                 ),
                               );
                               return valid.length === 2 ? valid : [];
@@ -895,7 +914,9 @@ function Montar() {
                       <p className="text-xs text-muted-foreground mt-0.5">
                         {isFixedSauceDailyPasta
                           ? "Molhos mistos fixados da receita de hoje da Massa do Dia."
-                          : "Escolha exatamente 2 opções para compor seu molho misturado."}
+                          : MIXED_SAUCE_PRICE > 0
+                            ? `Escolha exatamente 2 opções para compor seu molho misturado (+ ${brl(MIXED_SAUCE_PRICE)}).`
+                            : "Escolha exatamente 2 opções para compor seu molho misturado."}
                       </p>
                     </div>
                     <span
@@ -912,7 +933,7 @@ function Montar() {
 
                   <div className="mt-4 grid gap-3 grid-cols-2 lg:grid-cols-4">
                     {BASE_MIXABLE_SAUCES.map((b) => {
-                      const isUnavailable = unavailableIngredients.includes(b.id);
+                      const isUnavailable = isItemUnavailable(b.id, unavailableIngredients);
                       const isPicked = sauces.includes(b.id);
                       return (
                         <div key={b.id} className="relative">
@@ -988,6 +1009,7 @@ function Montar() {
                   {sauces.length === 2 ? (
                     <p className="mt-3.5 text-xs font-medium text-emerald-400 flex items-center gap-1.5">
                       ✓ Mistura selecionada: <strong>{sauces.join(" + ")}</strong>
+                      {MIXED_SAUCE_PRICE > 0 ? ` (+ ${brl(MIXED_SAUCE_PRICE)})` : ""}
                     </p>
                   ) : (
                     <p className="mt-3.5 text-xs text-amber-400">
@@ -1016,7 +1038,10 @@ function Montar() {
             >
               <div className="grid grid-cols-2 gap-3 sm:grid-cols-3 lg:grid-cols-4">
                 {INGREDIENTS.map((i) => {
-                  const isUnavailable = unavailableIngredients.includes(i.id);
+                  const isUnavailable = isItemUnavailable(
+                    [i.id, i.id === "Azeitona comum" ? "Azeitona preta" : undefined],
+                    unavailableIngredients,
+                  );
                   return (
                     <div key={i.id} className="relative">
                       <OptionCard
@@ -1069,7 +1094,7 @@ function Montar() {
             <StepShell title="Como você quer refogar?" subtitle="Uma opção por massa.">
               <div className="grid gap-3 sm:grid-cols-2">
                 {SAUTES.map((s) => {
-                  const isUnavailable = unavailableIngredients.includes(s.id);
+                  const isUnavailable = isItemUnavailable(s.id, unavailableIngredients);
                   return (
                     <div key={s.id} className="relative">
                       <OptionCard
@@ -1109,7 +1134,7 @@ function Montar() {
             >
               <div className="grid grid-cols-2 gap-3 sm:grid-cols-3">
                 {FINISHINGS.map((f) => {
-                  const isUnavailable = unavailableIngredients.includes(f.id);
+                  const isUnavailable = isItemUnavailable(f.id, unavailableIngredients);
                   const isSelected = finishing.includes(f.id);
                   const isLimitReached = !isSelected && finishing.length >= 3;
                   return (
@@ -1211,10 +1236,15 @@ function Montar() {
                         <div className="mt-3 grid gap-2.5 sm:grid-cols-2">
                           {cat.items.map((item) => {
                             const count = beverageCounts[item.id] || 0;
-                            const isUnavailable =
-                              unavailableIngredients.includes(item.id) ||
-                              unavailableIngredients.includes(item.name) ||
-                              unavailableIngredients.includes(`${cat.name} — ${item.name}`);
+                            const isUnavailable = isItemUnavailable(
+                              [
+                                item.id,
+                                item.name,
+                                `${cat.name} — ${item.name}`,
+                                `${cat.name} - ${item.name}`,
+                              ],
+                              unavailableIngredients,
+                            );
                             return (
                               <div
                                 key={item.id}
@@ -1324,9 +1354,15 @@ function Montar() {
                               {item.flavors.map((flavor) => {
                                 const key = `${item.id}_${flavor}`;
                                 const count = dessertCounts[key] || 0;
-                                const isUnavailable =
-                                  unavailableIngredients.includes(key) ||
-                                  unavailableIngredients.includes(`${item.name} — ${flavor}`);
+                                const isUnavailable = isItemUnavailable(
+                                  [
+                                    key,
+                                    `${item.name} — ${flavor}`,
+                                    `${item.name} - ${flavor}`,
+                                    flavor,
+                                  ],
+                                  unavailableIngredients,
+                                );
                                 return (
                                   <div
                                     key={flavor}
@@ -1390,9 +1426,10 @@ function Montar() {
                   }
 
                   const count = dessertCounts[item.id] || 0;
-                  const isUnavailable =
-                    unavailableIngredients.includes(item.id) ||
-                    unavailableIngredients.includes(item.name);
+                  const isUnavailable = isItemUnavailable(
+                    [item.id, item.name],
+                    unavailableIngredients,
+                  );
                   return (
                     <div
                       key={item.id}
@@ -1619,6 +1656,7 @@ function Montar() {
                     <SummaryRow
                       label="Molho"
                       list={item.sauces}
+                      extra={item.isMixedSauce && MIXED_SAUCE_PRICE > 0 ? `+ ${brl(MIXED_SAUCE_PRICE)}` : undefined}
                     />
                     <SummaryRow label="Ingredientes" list={item.ingredients} />
                     {item.extraIngredientsFee && item.extraIngredientsFee > 0 ? (
@@ -1656,6 +1694,11 @@ function Montar() {
                         sauceMode === "Misturado"
                           ? [`Misturado (${sauces.join(" + ")})`]
                           : sauces
+                      }
+                      extra={
+                        sauceMode === "Misturado" && MIXED_SAUCE_PRICE > 0
+                          ? `+ ${brl(MIXED_SAUCE_PRICE)}`
+                          : undefined
                       }
                     />
                     <SummaryRow label="Ingredientes" list={ingredients} />
@@ -1770,7 +1813,7 @@ function Montar() {
                       PAYMENT_METHODS.find((p) => p.id === paymentMethod)?.label ?? "Não informada"
                     }
                   />
-                  {paymentMethod === "cartao_credito" && (
+                  {paymentMethod === "cartao_credito" && CREDIT_CARD_FEE > 0 && (
                     <SummaryRow
                       label="Taxa da Maquininha (Crédito)"
                       value="Crédito"

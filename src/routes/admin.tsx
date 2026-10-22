@@ -1,6 +1,6 @@
 import { createFileRoute } from "@tanstack/react-router";
 import { Bell, ChefHat, Layers, Loader2, LogOut, RefreshCw, Search } from "lucide-react";
-import { useCallback, useEffect, useMemo, useState } from "react";
+import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import { toast } from "sonner";
 
 import { Logo } from "@/components/brand/Logo";
@@ -21,15 +21,16 @@ import {
   type OrderStatus,
 } from "@/lib/menu";
 import {
-  fetchUnavailableIngredients,
-  getStoredUnavailableIngredients,
-  saveUnavailableIngredients,
+  subscribeToStock,
+  saveIngredientAvailability,
 } from "@/lib/stock";
 
 export const Route = createFileRoute("/admin")({
   ssr: false,
   head: () => ({
     meta: [
+      { property: "og:type", content: "website" },
+      { name: "twitter:card", content: "summary" },
       { title: "Painel do restaurante — Sr e Sra Massas" },
       { name: "description", content: "Área restrita da equipe Sr e Sra Massas." },
       { name: "robots", content: "noindex" },
@@ -46,14 +47,6 @@ function Admin() {
   const [signedIn, setSignedIn] = useState(false);
 
   const check = useCallback(async () => {
-    // 1. Verifica se já está autenticado localmente
-    if (typeof window !== "undefined" && localStorage.getItem("admin_local_auth") === "true") {
-      setSignedIn(true);
-      setIsStaff(true);
-      setChecking(false);
-      return;
-    }
-
     try {
       const { data } = await supabase.auth.getUser();
       if (!data?.user) {
@@ -74,7 +67,7 @@ function Admin() {
           roles = res.data;
         }
       }
-      setIsStaff((roles ?? []).length > 0 || true); // Permite acesso do staff autenticado
+      setIsStaff((roles ?? []).some((row) => row.role === "admin" || row.role === "staff"));
       setChecking(false);
     } catch {
       setChecking(false);
@@ -85,8 +78,8 @@ function Admin() {
     void check();
     let unsubscribe: (() => void) | undefined;
     try {
-      const { data: sub } = supabase.auth.onAuthStateChange(() => {
-        void check();
+      const { data: sub } = supabase.auth.onAuthStateChange((event) => {
+        if (event === "SIGNED_IN" || event === "SIGNED_OUT" || event === "USER_UPDATED") setTimeout(() => void check(), 0);
       });
       unsubscribe = () => sub.subscription.unsubscribe();
     } catch {
@@ -105,7 +98,7 @@ function Admin() {
     );
   }
 
-  if (!signedIn) return <AdminLogin onLocalSuccess={() => { setSignedIn(true); setIsStaff(true); }} />;
+  if (!signedIn) return <AdminLogin onSuccess={() => void check()} />;
   if (!isStaff) return <NoAccess />;
   return <Dashboard onLogout={() => {
     localStorage.removeItem("admin_local_auth");
@@ -126,7 +119,7 @@ function AdminShell({ children }: { children: React.ReactNode }) {
   );
 }
 
-function AdminLogin({ onLocalSuccess }: { onLocalSuccess: () => void }) {
+function AdminLogin({ onSuccess }: { onSuccess: () => void }) {
   const [username, setUsername] = useState("");
   const [password, setPassword] = useState("");
   const [mode, setMode] = useState<"login" | "signup">("login");
@@ -144,44 +137,24 @@ function AdminLogin({ onLocalSuccess }: { onLocalSuccess: () => void }) {
 
     setLoading(true);
 
-    // Fallback mestre direto para equipe/restaurante
-    const MASTER_PASSWORDS = ["123456", "admin", "admin123", "srsramassas", "restaurante"];
-    if (MASTER_PASSWORDS.includes(password.toLowerCase()) || password.length >= 4) {
-      localStorage.setItem("admin_local_auth", "true");
-      setLoading(false);
-      toast.success("Login realizado com sucesso! Bem-vindo ao painel.");
-      onLocalSuccess();
-      return;
-    }
-
     const email = user.includes("@") ? user : `${user}@srsramassas.app`;
-
     try {
       if (mode === "login") {
         const { error } = await supabase.auth.signInWithPassword({ email, password });
-        setLoading(false);
-        if (error) {
-          // Fallback resiliente
-          localStorage.setItem("admin_local_auth", "true");
-          toast.success("Acesso autorizado!");
-          onLocalSuccess();
-        }
+        if (error) throw error;
+        onSuccess();
       } else {
-        const { error } = await supabase.auth.signUp({
-          email,
-          password,
-          options: { emailRedirectTo: `${window.location.origin}/admin` },
+        const { data, error } = await supabase.auth.signUp({
+          email, password, options: { emailRedirectTo: `${window.location.origin}/admin` },
         });
-        setLoading(false);
-        localStorage.setItem("admin_local_auth", "true");
-        toast.success("Conta criada! Bem-vindo ao painel.");
-        onLocalSuccess();
+        if (error) throw error;
+        if (data.session) onSuccess();
+        else toast.success("Conta criada. Verifique a confirmação da conta antes de entrar.");
       }
     } catch {
+      toast.error(mode === "login" ? "Não foi possível entrar. Confira usuário e senha." : "Não foi possível criar a conta. Tente novamente.");
+    } finally {
       setLoading(false);
-      localStorage.setItem("admin_local_auth", "true");
-      toast.success("Bem-vindo ao painel!");
-      onLocalSuccess();
     }
   }
 
@@ -254,52 +227,26 @@ function Dashboard({ onLogout }: { onLogout?: () => void }) {
   const [unavailableIngredients, setUnavailableIngredients] = useState<string[]>([]);
 
   // Carrega lista de estoque indisponível
-  useEffect(() => {
-    setUnavailableIngredients(getStoredUnavailableIngredients());
-    void fetchUnavailableIngredients().then((list) => {
+  useEffect(() => subscribeToStock("stock-realtime-admin", setUnavailableIngredients), []);
+
+  const savingStockRef = useRef(false);
+  const [savingStock, setSavingStock] = useState(false);
+  const toggleIngredientAvailability = async (ingredientId: string, unavailable: boolean) => {
+    if (savingStockRef.current) return;
+    savingStockRef.current = true;
+    setSavingStock(true);
+    try {
+      const list = await saveIngredientAvailability(ingredientId, unavailable);
       setUnavailableIngredients(list);
-    });
-
-    const channel = supabase
-      .channel("stock-realtime-admin")
-      .on(
-        "postgres_changes",
-        { event: "*", schema: "public", table: "stock_settings" },
-        (payload) => {
-          const row = payload.new as { unavailable_items?: string[] } | undefined;
-          if (row?.unavailable_items) {
-            setUnavailableIngredients(row.unavailable_items);
-            if (typeof window !== "undefined") {
-              localStorage.setItem("sresramassas_unavailable_ingredients", JSON.stringify(row.unavailable_items));
-            }
-          }
-        },
-      )
-      .on("broadcast", { event: "stock_update" }, (payload: { [key: string]: unknown }) => {
-        const data = payload["payload"] as { unavailable?: string[] } | undefined;
-        if (data?.unavailable) {
-          setUnavailableIngredients(data.unavailable);
-        }
-      })
-      .subscribe();
-
-    return () => {
-      void supabase.removeChannel(channel);
-    };
-  }, []);
-
-  const toggleIngredientAvailability = (ingredientId: string, setUnavailable: boolean) => {
-    let nextList: string[];
-    if (setUnavailable) {
-      nextList = Array.from(new Set([...unavailableIngredients, ingredientId]));
-    } else {
-      nextList = unavailableIngredients.filter((id) => id !== ingredientId);
+      toast.success(`${ingredientId}: ${unavailable ? "Marcado como ESGOTADO" : "Marcado como DISPONÍVEL"}`);
+    } catch {
+      toast.error("Não foi possível salvar o estoque", {
+        description: "A alteração não foi confirmada. Verifique sua conexão e tente novamente.",
+      });
+    } finally {
+      savingStockRef.current = false;
+      setSavingStock(false);
     }
-    setUnavailableIngredients(nextList);
-    saveUnavailableIngredients(nextList);
-    toast.success(
-      `${ingredientId}: ${setUnavailable ? "Marcado como ESGOTADO" : "Marcado como DISPONÍVEL"}`,
-    );
   };
 
   const load = useCallback(async () => {
@@ -486,6 +433,7 @@ function Dashboard({ onLogout }: { onLogout?: () => void }) {
           <StockManager
             unavailable={unavailableIngredients}
             onToggle={toggleIngredientAvailability}
+            saving={savingStock}
           />
         ) : (
           <OrdersView
@@ -504,9 +452,11 @@ function Dashboard({ onLogout }: { onLogout?: () => void }) {
 function StockManager({
   unavailable,
   onToggle,
+  saving,
 }: {
   unavailable: string[];
   onToggle: (id: string, setUnavailable: boolean) => void;
+  saving: boolean;
 }) {
   const [filter, setFilter] = useState("");
 
@@ -643,6 +593,7 @@ function StockManager({
                       </div>
                       <button
                         type="button"
+                        disabled={saving}
                         onClick={() => onToggle(item.id, !isEsgotado)}
                         className={`shrink-0 rounded-lg px-2.5 py-1 text-[11px] font-bold tracking-wider uppercase transition-all ${
                           isEsgotado

@@ -1,4 +1,5 @@
-import { describe, expect, test } from "bun:test";
+import { describe, test } from "node:test";
+import assert from "node:assert/strict";
 import { changeStockAvailability, type StockRow } from "./stock-repository";
 import { MIXED_SAUCE_PRICE } from "./menu";
 
@@ -9,9 +10,9 @@ describe("estoque persistente", () => {
       read: async () => row,
       write: async (items: string[]) => { row = { unavailable_items: items, updated_at: "2" }; return true; },
     };
-    expect(await changeStockAvailability(adapter, "Tomate", true)).toEqual(["Bacon", "Tomate"]);
-    expect((await adapter.read())?.unavailable_items).toEqual(["Bacon", "Tomate"]);
-    expect(await changeStockAvailability(adapter, "Tomate", false)).toEqual(["Bacon"]);
+    assert.deepEqual(await changeStockAvailability(adapter, "Tomate", true), ["Bacon", "Tomate"]);
+    assert.deepEqual((await adapter.read())?.unavailable_items, ["Bacon", "Tomate"]);
+    assert.deepEqual(await changeStockAvailability(adapter, "Tomate", false), ["Bacon"]);
   });
   test("não perde alteração concorrente de outro painel", async () => {
     let row: StockRow = { unavailable_items: [], updated_at: "1" };
@@ -24,13 +25,13 @@ describe("estoque persistente", () => {
         row = { unavailable_items: items, updated_at: "3" }; return true;
       },
     }, "Tomate", true);
-    expect(result).toEqual(["Bacon", "Tomate"]);
+    assert.deepEqual(result, ["Bacon", "Tomate"]);
   });
   test("erro de salvamento não vira confirmação de sucesso", async () => {
-    await expect(changeStockAvailability({ read: async () => null, write: async () => { throw new Error("Falha ao salvar"); } }, "Tomate", true)).rejects.toThrow("Falha ao salvar");
+    await assert.rejects(changeStockAvailability({ read: async () => null, write: async () => { throw new Error("Falha ao salvar"); } }, "Tomate", true), /Falha ao salvar/);
   });
 });
 
 test("molho misturado tem acréscimo de zero reais", () => {
-  expect(MIXED_SAUCE_PRICE).toBe(0);
+  assert.equal(MIXED_SAUCE_PRICE, 0);
 });

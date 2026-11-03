@@ -98,6 +98,24 @@ export type Database = {
         }
         Relationships: []
       }
+      stock_settings: {
+        Row: {
+          id: string
+          unavailable_items: string[]
+          updated_at: string
+        }
+        Insert: {
+          id: string
+          unavailable_items?: string[]
+          updated_at?: string
+        }
+        Update: {
+          id?: string
+          unavailable_items?: string[]
+          updated_at?: string
+        }
+        Relationships: []
+      }
       user_roles: {
         Row: {
           created_at: string

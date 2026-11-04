@@ -155,20 +155,51 @@ function Cardapio() {
 
         <Section index="1" title="Tamanhos">
           <div className="grid gap-4 sm:grid-cols-3">
-            {SIZES.map((s) => (
-              <div key={s.id} className="relative rounded-2xl border border-border bg-secondary/40 p-5">
-                {s.badge ? (
-                  <span className="absolute -top-2.5 left-4 rounded-full bg-gradient-to-r from-red-600 to-amber-500 px-2.5 py-0.5 text-[10px] font-black uppercase text-white shadow-md">
-                    {s.badge}
-                  </span>
-                ) : null}
-                <p className="font-display text-lg font-bold text-foreground uppercase">{s.label}</p>
-                <p className="font-display text-3xl font-bold text-gold">{brl(s.price)}</p>
-                <p className="mt-1 text-sm text-muted-foreground">
-                  até {s.limit} ingredientes inclusos
-                </p>
-              </div>
-            ))}
+            {SIZES.map((s) => {
+              const isUnavailable = isItemUnavailable([s.id, s.label], unavailableIngredients);
+              return (
+                <div
+                  key={s.id}
+                  className={`relative rounded-2xl border p-5 transition-colors ${
+                    isUnavailable
+                      ? "border-red-500/30 bg-red-950/20 opacity-70"
+                      : "border-border bg-secondary/40"
+                  }`}
+                >
+                  <div className="flex items-start justify-between">
+                    <div>
+                      {s.badge ? (
+                        <span className="inline-block mb-1.5 rounded-full bg-gradient-to-r from-red-600 to-amber-500 px-2.5 py-0.5 text-[10px] font-black uppercase text-white shadow-md">
+                          {s.badge}
+                        </span>
+                      ) : null}
+                      <p
+                        className={`font-display text-lg font-bold uppercase ${
+                          isUnavailable ? "line-through text-muted-foreground" : "text-foreground"
+                        }`}
+                      >
+                        {s.label}
+                      </p>
+                    </div>
+                    {isUnavailable ? (
+                      <span className="rounded bg-red-600/80 px-1.5 py-0.5 text-[9px] font-bold text-white uppercase">
+                        Esgotado
+                      </span>
+                    ) : null}
+                  </div>
+                  <p
+                    className={`font-display text-3xl font-bold ${
+                      isUnavailable ? "text-muted-foreground line-through" : "text-gold"
+                    }`}
+                  >
+                    {brl(s.price)}
+                  </p>
+                  <p className="mt-1 text-sm text-muted-foreground">
+                    até {s.limit} ingredientes inclusos
+                  </p>
+                </div>
+              );
+            })}
           </div>
         </Section>
 

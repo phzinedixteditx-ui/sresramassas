@@ -242,7 +242,10 @@ function Montar() {
   const canAdvance = useMemo(() => {
     switch (step) {
       case 0:
-        return !!size;
+        return (
+          !!size &&
+          !isItemUnavailable([size, SIZES.find((s) => s.id === size)?.label], unavailableIngredients)
+        );
       case 1:
         return !!pasta && !isItemUnavailable(pasta, unavailableIngredients);
       case 2:
@@ -345,8 +348,14 @@ function Montar() {
 
   function next() {
     if (!canAdvance) {
-      if (step === 0 && !size) {
-        toast.error("Escolha o tamanho", { description: "Selecione o tamanho da massa para continuar." });
+      if (
+        step === 0 &&
+        (!size ||
+          isItemUnavailable([size, SIZES.find((s) => s.id === size)?.label], unavailableIngredients))
+      ) {
+        toast.error("Escolha o tamanho", {
+          description: "Selecione um tamanho de massa disponível para continuar.",
+        });
         return;
       }
       if (step === 1 && (!pasta || isItemUnavailable(pasta, unavailableIngredients))) {
@@ -686,7 +695,18 @@ function Montar() {
                 onClick={() => {
                   setIsDailyPasta(true);
                   setPresetIngredients(todayDailyPasta.ingredients);
-                  if (!size) setSize("pequeno");
+                  if (
+                    !size ||
+                    isItemUnavailable(
+                      [size, SIZES.find((s) => s.id === size)?.label],
+                      unavailableIngredients,
+                    )
+                  ) {
+                    const firstAvailableSize = SIZES.find(
+                      (s) => !isItemUnavailable([s.id, s.label], unavailableIngredients),
+                    )?.id;
+                    if (firstAvailableSize) setSize(firstAvailableSize);
+                  }
                   if (PASTAS.some((p) => p.id === todayDailyPasta.pasta)) {
                     setPasta(todayDailyPasta.pasta);
                   }
@@ -766,6 +786,7 @@ function Montar() {
             >
               <div className="grid gap-4 sm:grid-cols-3">
                 {SIZES.map((s) => {
+                  const isUnavailable = isItemUnavailable([s.id, s.label], unavailableIngredients);
                   const displayPrice = isDailyPasta
                     ? s.id === "kids"
                       ? 19.99
@@ -778,17 +799,30 @@ function Montar() {
                     : (s.desc || `Até ${s.limit} adicionais inclusos (extras + R$ 1,00)`);
 
                   return (
-                    <OptionCard
-                      key={s.id}
-                      title={s.label.toUpperCase()}
-                      description={displayDesc}
-                      price={brl(displayPrice)}
-                      selected={size === s.id}
-                      badge={isDailyPasta ? "PROMO DIA!" : s.badge}
-                      onClick={() => {
-                        setSize(s.id);
-                      }}
-                    />
+                    <div key={s.id} className="relative">
+                      <OptionCard
+                        title={s.label.toUpperCase()}
+                        description={displayDesc}
+                        price={brl(displayPrice)}
+                        selected={size === s.id}
+                        disabled={isUnavailable}
+                        badge={isDailyPasta ? "PROMO DIA!" : s.badge}
+                        onClick={() => {
+                          if (isUnavailable) {
+                            toast.error("Tamanho indisponível", {
+                              description: `${s.label} está temporariamente esgotado.`,
+                            });
+                            return;
+                          }
+                          setSize(s.id);
+                        }}
+                      />
+                      {isUnavailable ? (
+                        <span className="absolute -top-1.5 -right-1.5 rounded-full bg-red-600 px-2 py-0.5 text-[9px] font-bold text-white shadow z-10">
+                          Esgotado
+                        </span>
+                      ) : null}
+                    </div>
                   );
                 })}
               </div>

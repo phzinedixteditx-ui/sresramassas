@@ -18,6 +18,7 @@ import {
   PASTAS,
   SAUCES,
   SAUTES,
+  SIZES,
   type OrderStatus,
 } from "@/lib/menu";
 import {
@@ -570,6 +571,15 @@ function StockManager({
   }[] = [
     { title: "Bebidas", items: beverageStockItems },
     { title: "Doces & Sobremesas", items: dessertStockItems },
+    {
+      title: "Tamanhos da Massa",
+      items: SIZES.map((sz) => ({
+        id: sz.id,
+        name: sz.label,
+        emoji: "📏",
+        aliases: [sz.id, sz.label, `tamanho_${sz.id}`],
+      })),
+    },
     {
       title: "Massas",
       items: PASTAS.map((p) => ({ id: p.id, name: p.id, aliases: [p.id] })),

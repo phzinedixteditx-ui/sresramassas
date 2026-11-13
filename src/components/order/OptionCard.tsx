@@ -21,7 +21,7 @@ export function OptionCard({
   disabled?: boolean;
   onClick: () => void;
   compact?: boolean;
-  badge?: string;
+  badge?: string | undefined;
 }) {
   return (
     <button

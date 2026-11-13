@@ -309,7 +309,21 @@ function Montar() {
   }
 
   function updateBeverageCount(itemId: string, delta: number) {
-    if (delta > 0 && isItemUnavailable(itemId, unavailableIngredients)) {
+    let itemAliases: string[] = [itemId];
+    for (const cat of BEVERAGE_CATEGORIES) {
+      const found = cat.items.find((i) => i.id === itemId);
+      if (found) {
+        itemAliases = [
+          found.id,
+          found.name,
+          `${cat.name} — ${found.name}`,
+          `${cat.name} - ${found.name}`,
+        ];
+        break;
+      }
+    }
+
+    if (delta > 0 && isItemUnavailable(itemAliases, unavailableIngredients)) {
       toast.error("⚠️ Bebida esgotada", {
         description: "Esta bebida está temporariamente indisponível.",
       });

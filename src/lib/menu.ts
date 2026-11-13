@@ -131,6 +131,9 @@ export const BEVERAGE_CATEGORIES: BeverageCategory[] = [
       { id: "coca_mini", name: "Coca-Cola", price: 4 },
       { id: "guarana_mini_zero", name: "Guaraná Zero", price: 4 },
       { id: "guarana_mini", name: "Guaraná", price: 4 },
+      { id: "soda_mini", name: "Soda", price: 4 },
+      { id: "pepsi_mini", name: "Pepsi", price: 4 },
+      { id: "sukita_mini", name: "Sukita", price: 4 },
     ],
   },
   {

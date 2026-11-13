@@ -10,6 +10,7 @@
 
 import { Route as rootRouteImport } from './routes/__root'
 import { Route as IndexRouteImport } from './routes/index'
+import { Route as AcompanharRouteImport } from './routes/acompanhar'
 import { Route as AdminRouteImport } from './routes/admin'
 import { Route as CardapioRouteImport } from './routes/cardapio'
 import { Route as MontarRouteImport } from './routes/montar'
@@ -17,6 +18,11 @@ import { Route as MontarRouteImport } from './routes/montar'
 const IndexRoute = IndexRouteImport.update({
   id: '/',
   path: '/',
+  getParentRoute: () => rootRouteImport,
+} as any)
+const AcompanharRoute = AcompanharRouteImport.update({
+  id: '/acompanhar',
+  path: '/acompanhar',
   getParentRoute: () => rootRouteImport,
 } as any)
 const AdminRoute = AdminRouteImport.update({
@@ -37,12 +43,14 @@ const MontarRoute = MontarRouteImport.update({
 
 export interface FileRoutesByFullPath {
   '/': typeof IndexRoute
+  '/acompanhar': typeof AcompanharRoute
   '/admin': typeof AdminRoute
   '/cardapio': typeof CardapioRoute
   '/montar': typeof MontarRoute
 }
 export interface FileRoutesByTo {
   '/': typeof IndexRoute
+  '/acompanhar': typeof AcompanharRoute
   '/admin': typeof AdminRoute
   '/cardapio': typeof CardapioRoute
   '/montar': typeof MontarRoute
@@ -50,20 +58,22 @@ export interface FileRoutesByTo {
 export interface FileRoutesById {
   __root__: typeof rootRouteImport
   '/': typeof IndexRoute
+  '/acompanhar': typeof AcompanharRoute
   '/admin': typeof AdminRoute
   '/cardapio': typeof CardapioRoute
   '/montar': typeof MontarRoute
 }
 export interface FileRouteTypes {
   fileRoutesByFullPath: FileRoutesByFullPath
-  fullPaths: '/' | '/admin' | '/cardapio' | '/montar'
+  fullPaths: '/' | '/acompanhar' | '/admin' | '/cardapio' | '/montar'
   fileRoutesByTo: FileRoutesByTo
-  to: '/' | '/admin' | '/cardapio' | '/montar'
-  id: '__root__' | '/' | '/admin' | '/cardapio' | '/montar'
+  to: '/' | '/acompanhar' | '/admin' | '/cardapio' | '/montar'
+  id: '__root__' | '/' | '/acompanhar' | '/admin' | '/cardapio' | '/montar'
   fileRoutesById: FileRoutesById
 }
 export interface RootRouteChildren {
   IndexRoute: typeof IndexRoute
+  AcompanharRoute: typeof AcompanharRoute
   AdminRoute: typeof AdminRoute
   CardapioRoute: typeof CardapioRoute
   MontarRoute: typeof MontarRoute
@@ -76,6 +86,13 @@ declare module '@tanstack/react-router' {
       path: '/'
       fullPath: '/'
       preLoaderRoute: typeof IndexRouteImport
+      parentRoute: typeof rootRouteImport
+    }
+    '/acompanhar': {
+      id: '/acompanhar'
+      path: '/acompanhar'
+      fullPath: '/acompanhar'
+      preLoaderRoute: typeof AcompanharRouteImport
       parentRoute: typeof rootRouteImport
     }
     '/admin': {
@@ -104,6 +121,7 @@ declare module '@tanstack/react-router' {
 
 const rootRouteChildren: RootRouteChildren = {
   IndexRoute: IndexRoute,
+  AcompanharRoute: AcompanharRoute,
   AdminRoute: AdminRoute,
   CardapioRoute: CardapioRoute,
   MontarRoute: MontarRoute,

@@ -8,6 +8,13 @@
       "when": 1793749934987,
       "tag": "0000_persist_stock_settings",
       "breakpoints": true
+    },
+    {
+      "idx": 1,
+      "version": "7",
+      "when": 1794600631324,
+      "tag": "0001_restrict_stock_read",
+      "breakpoints": true
     }
   ]
 }
